@@ -129,7 +129,8 @@ no billing, no limits, email sign-in. Designers and developers on different comp
 cd selfhost
 cp .env.example .env               # set PUBLIC_URL to the address your team will use
 node scripts/generate-keys.mjs     # secrets, keys and the setup code for the first account
-docker compose up -d --build
+docker compose pull                # the ready-made server image, ghcr.io/orkestralai/codesignflo-server
+docker compose up -d
 ```
 
 Open `PUBLIC_URL`, create the first account with the setup code (it becomes the admin) and open **Set up**: each

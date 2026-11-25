@@ -29,8 +29,13 @@ cd selfhost
 cp .env.example .env
 # set PUBLIC_URL to the address people will use (see section 3), then:
 node scripts/generate-keys.mjs     # creates the passwords and keys in .env
-docker compose up -d --build       # the first start takes a few minutes
+docker compose pull                # downloads the server and its database (about a minute)
+docker compose up -d
 ```
+
+The server comes ready-made (`ghcr.io/orkestralai/codesignflo-server`, `CODESIGNFLO_IMAGE` in `.env`). To build it
+from this copy of the code instead (if you changed it), empty `CODESIGNFLO_IMAGE` and start with
+`docker compose up -d --build`: the first build takes a few minutes.
 
 Open `PUBLIC_URL` in a browser and **create the first account with the setup code** that `generate-keys.mjs` printed
 (`SETUP_CODE` in `.env`): it becomes the box's admin. Without the code nobody can, so a box that's reachable before
@@ -116,8 +121,8 @@ codesignflo.com: `npx @codesignflo/cli connect --cloud`.
 
 ## 7. Updates and backups
 
-**Update:** get the new version of this repository (`git pull`), then `docker compose up -d --build`. New database
-changes are applied by themselves on start. Then designers download the plugin again from Set up (same folder) and developers update the CLI
+**Update:** get the new version of this repository (`git pull`), then `docker compose pull` and `docker compose up -d`
+(built from the code: `docker compose up -d --build`). New database changes are applied by themselves on start. Then designers download the plugin again from Set up (same folder) and developers update the CLI
 (`npx @codesignflo/cli@latest`).
 
 **Backup:** `sh scripts/backup.sh` saves the database, the stored files and `.env` into `backups/<date>/`. Copy that
