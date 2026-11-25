@@ -85,8 +85,8 @@ export function landingHtml(c: LandingConfig): string {
     <a href="#how" data-scroll="how" class="lp-nav">How it works</a>
     <a href="#start" data-scroll="start" class="lp-nav">Get started</a>
     <a href="#pricing" data-scroll="pricing" class="lp-nav">Pricing</a>
-    <a href="#selfhost" data-scroll="selfhost" class="lp-nav">Self-host</a>
-    ${REPO_URL ? `<a href="${REPO_URL}" target="_blank" rel="noopener" class="lp-nav">GitHub</a>` : ""}
+    <a href="#selfhost" data-scroll="selfhost" class="lp-nav lp-nav-wide">Self-host</a>
+    ${REPO_URL ? `<a href="${REPO_URL}" target="_blank" rel="noopener" class="lp-nav lp-nav-wide">GitHub</a>` : ""}
     <a href="#/docs/designers" class="lp-nav">Docs</a>
     <a href="#/signin" class="lp-button lp-small">Sign in</a>
   </header>

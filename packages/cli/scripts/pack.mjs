@@ -51,7 +51,7 @@ writeFileSync(
       dependencies: Object.fromEntries(external.map((d) => [d, pkg.dependencies[d]])),
       // The public npm registry: `npx @codesignflo/cli` works on any machine with nothing configured.
       publishConfig: { registry: "https://registry.npmjs.org/", access: "public" },
-      repository: { type: "git", url: "git+https://github.com/orkestralai/codesignflo-private.git" },
+      repository: { type: "git", url: "git+https://github.com/orkestralai/codesignflo.git" },
       homepage: "https://codesignflo.com",
       keywords: ["figma", "storybook", "design", "design-to-code", "mcp", "react", "design-system", "claude-code"],
     },

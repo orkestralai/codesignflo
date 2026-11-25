@@ -374,6 +374,8 @@
         .lp-step:nth-child(-n+2) { border-bottom: 1px solid rgba(255,255,255,0.25); }
       }
       @media (max-width: 900px) {
+        /* Narrower: the menu keeps what fits; Self-host and GitHub are in the page (Two ways to run it). */
+        .lp-nav-wide { display: none; }
         .lp-faq { grid-template-columns: 1fr; }
         .lp-step:nth-child(2)::after { display: none; }
       }
