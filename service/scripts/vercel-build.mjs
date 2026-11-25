@@ -155,6 +155,8 @@ writeFileSync(
           continue: true,
         })),
         { handle: "filesystem" },
+        // The legal pages, written out at build time (readable without JavaScript).
+        { src: "^/(privacy|terms|impressum|cookies|security)/?$", dest: "/$1.html" },
         { src: "^/(?!mcp|api/|\\.well-known/).*$", dest: "/index.html" },
       ],
       crons: [{ path: "/api/notify", schedule: "0 8 * * *" }],

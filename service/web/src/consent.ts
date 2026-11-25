@@ -87,7 +87,7 @@ function banner(): HTMLElement {
   el.className = "consent";
   el.setAttribute("role", "dialog");
   el.setAttribute("aria-label", "Cookies and privacy");
-  el.innerHTML = `<p><b>No cookies here.</b> CoDesignFlo only keeps what it needs to work in your browser (your sign-in, your choices). With your OK we also count visits with ship-or-die.com: no cookies, no identifiers. <a href="#/cookies">Details</a></p>
+  el.innerHTML = `<p><b>No cookies.</b> With your OK, we count visits anonymously. <a href="/cookies">Details</a></p>
     <div class="consent-actions"><button type="button" data-consent="no">Only necessary</button><button type="button" data-consent="yes">Allow counting</button></div>`;
   for (const b of el.querySelectorAll<HTMLButtonElement>("[data-consent]"))
     b.onclick = () => {

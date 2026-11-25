@@ -12,7 +12,7 @@ import { logoSvg } from "./logo.ts";
 import { billingHtml, billingNotice, confirmCheckout, goToStripe, myBilling, myReferrals, mySeats, refreshBilling } from "./billing.ts";
 import { DOC_SLUGS, docHtml, docIndex, docTitle } from "./docs.ts";
 import { landingHtml } from "./landing.ts";
-import { LEGAL_PAGES, type LegalPage, legalHtml } from "./legal.ts";
+import { LEGAL_PAGES, LEGAL_TITLES, type LegalPage, legalHtml } from "./legal.ts";
 
 type Config = {
   url: string;
@@ -54,6 +54,11 @@ type Row = { seq: number; id: string; at: string; by: string; component: string;
 
 const app = document.getElementById("app")!;
 const params = new URLSearchParams(location.search);
+/**
+ * Back from a "set a new password" link (its address says type=recovery, read here before Supabase takes it out):
+ * until the new password is saved, every page is newPasswordScreen.
+ */
+let recovering = /[#&]type=recovery(&|$)/.test(location.hash);
 /**
  * Opened from the plugin's or the CLI's sign-in (?code=…): the person types the code they see there. The code in
  * the address is never used — a link someone else sent could carry theirs (one click would sign them in as you).
@@ -232,64 +237,133 @@ const SIGN_IN: SignInMethod[] = (["figma", "google", "github", "email"] as const
 );
 const PROVIDER_NAME = { figma: "Figma", google: "Google", github: "GitHub" } as const;
 
-/** "a, b or c". */
-const orList = (xs: string[]) => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} or ${xs[xs.length - 1]}`);
 
 /** Signs in with Figma, Google or GitHub, coming back to `back`. */
 function oauth(provider: "figma" | "google" | "github", back: string) {
   void sb.auth.signInWithOAuth({ provider, options: { redirectTo: back, ...(provider === "github" ? { queryParams: GITHUB_PICK } : {}) } });
 }
 
-function signInScreen(error = "", notice = "", typed = "") {
+function signInScreen(error = "", notice = "", typed = "", mode: "signin" | "signup" = "signin") {
   if (SELFHOST) return selfhostSignIn("signin", error);
-  document.title = "Sign in — CoDesignFlo";
+  const signup = mode === "signup";
+  document.title = `${signup ? "Create your account" : "Sign in"} — CoDesignFlo`;
   const back = location.href;
-  const design = SIGN_IN.filter((m) => m !== "github").map((m) => (m === "email" ? "a link by email" : PROVIDER_NAME[m]));
   const providers = SIGN_IN.filter((m) => m !== "email") as ("figma" | "google" | "github")[];
+  const email = SIGN_IN.includes("email");
   show(`<section class="narrow">
-    <h1>Sign in to CoDesignFlo</h1>
-    <p>${
-      SIGN_IN.includes("github") && design.length
-        ? `Designers sign in with ${orList(design)}, developers usually with GitHub.`
-        : "New here? Signing in makes your account."
-    }</p>
+    <p class="muted" style="margin:0 0 18px"><a href="#/">← CoDesignFlo home</a></p>
+    <h1>${signup ? "Create your CoDesignFlo account" : "Sign in to CoDesignFlo"}</h1>
+    <p>Use whichever you like, designer or developer.${email ? "" : " New here? Signing in creates your account."}</p>
     ${providers.map((p, i) => `<button ${i === 0 ? 'class="primary" ' : ""}id="oauth-${p}" type="button">Continue with ${PROVIDER_NAME[p]}</button>`).join("")}
     ${
-      SIGN_IN.includes("email")
-        ? `<form id="linkForm" style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+      email
+        ? `<form id="pwForm" style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
       ${providers.length ? `<p class="muted" style="margin:0">Or with your email:</p>` : ""}
-      <input id="linkEmail" type="email" placeholder="email" autocomplete="email" required value="${esc(typed)}" aria-label="Email">
-      <button ${providers.length ? "" : 'class="primary" '}id="linkGo" type="submit">Email me a sign-in link</button>
-    </form>`
+      <input id="email" type="email" placeholder="email" autocomplete="email" required value="${esc(typed)}" aria-label="Email">
+      <input id="pw" type="password" placeholder="${signup ? "password (8 characters or more)" : "password"}" autocomplete="${signup ? "new-password" : "current-password"}" required ${signup ? 'minlength="8"' : ""} aria-label="Password">
+      <button ${providers.length ? "" : 'class="primary" '}id="pwGo" type="submit">${signup ? "Create account" : "Sign in"}</button>
+    </form>
+    ${signup ? "" : `<p class="muted" style="margin:8px 0 0"><a href="#" id="magic">Email me a sign-in link instead</a> · <a href="#" id="forgot">Forgot your password?</a></p>`}
+    <p class="muted">${signup ? `Already have an account? <a href="#" id="switch">Sign in</a>` : `No account yet? <a href="#" id="switch">Create one</a> with your email, or continue with ${providers.length ? "one of the above" : "a sign-in link"}.`}</p>`
         : ""
     }
     ${
-      cfg.devEmail
-        ? `<div class="dev"><p>Local development: email</p><input id="email" type="email" placeholder="email"><input id="pw" type="password" placeholder="password (8+)"><button id="emailgo">Sign in / sign up</button></div>`
+      cfg.devEmail && !email
+        ? `<div class="dev"><p>Local development: email</p><input id="devEmail" type="email" placeholder="email"><input id="devPw" type="password" placeholder="password (8+)"><button id="emailgo">Sign in / sign up</button></div>`
         : ""
     }
     ${errorLine(error)}${notice ? `<p class="notice" role="status">${esc(notice)}</p>` : ""}
   </section>`);
   for (const p of providers) on(`oauth-${p}`, () => oauth(p, back));
-  const form = $<HTMLFormElement>("linkForm");
+  const typedEmail = () => $<HTMLInputElement>("email")?.value.trim() ?? "";
+  const busy = (yes: boolean) => {
+    const b = $<HTMLButtonElement>("pwGo");
+    if (b) b.disabled = yes;
+  };
+  const form = $<HTMLFormElement>("pwForm");
   if (form)
     form.onsubmit = async (e) => {
       e.preventDefault();
-      const email = $<HTMLInputElement>("linkEmail")!.value.trim();
-      $<HTMLButtonElement>("linkGo")!.disabled = true;
-      // The link comes back here (a device code's page too: the code is typed, never taken from the address).
-      const { error: err } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: back } });
-      if (err) return signInScreen(linkError(err.message), "", email);
-      signInScreen("", `Check your inbox: a sign-in link to ${email} is on its way. Open it in this browser.`, email);
+      const address = typedEmail();
+      const password = $<HTMLInputElement>("pw")!.value;
+      busy(true);
+      if (signup) {
+        // Auth confirms the address by email first (the link comes back here, signed in).
+        const { data, error: err } = await sb.auth.signUp({ email: address, password, options: { emailRedirectTo: back } });
+        if (err) return signInScreen(authError(err.message), "", address, mode);
+        // Auth answers the same for an address that already has an account (it emails nothing then, so nobody can
+        // find out which addresses have one): the message covers both.
+        if (!data.session)
+          return signInScreen(
+            "",
+            `Almost there: if ${address} is new here, open the link we've emailed it (in this browser), and you're in. Already have an account with it (from Google, GitHub or Figma too)? Sign in, or use Forgot your password to give it one.`,
+            address,
+            "signin",
+          );
+      } else {
+        const { error: err } = await sb.auth.signInWithPassword({ email: address, password });
+        if (err) return signInScreen(authError(err.message), "", address, mode);
+      }
+      void route();
     };
+  const link = $("switch");
+  if (link)
+    link.onclick = (e) => {
+      e.preventDefault();
+      signInScreen("", "", typedEmail(), signup ? "signin" : "signup");
+    };
+  const needEmail = (then: (address: string) => Promise<void>) => async (e: Event) => {
+    e.preventDefault();
+    const address = typedEmail();
+    if (!address) return signInScreen("Type your email first.", "", "", mode);
+    await then(address);
+  };
+  const magic = $("magic");
+  if (magic)
+    magic.onclick = needEmail(async (address) => {
+      // The link comes back here (a device code's page too: the code is typed, never taken from the address).
+      const { error: err } = await sb.auth.signInWithOtp({ email: address, options: { emailRedirectTo: back } });
+      if (err) return signInScreen(linkError(err.message), "", address);
+      signInScreen("", `Check your inbox: a sign-in link to ${address} is on its way. Open it in this browser.`, address);
+    });
+  const forgot = $("forgot");
+  if (forgot)
+    forgot.onclick = needEmail(async (address) => {
+      // The link signs them in and asks for a new password (Auth's PASSWORD_RECOVERY: newPasswordScreen).
+      const { error: err } = await sb.auth.resetPasswordForEmail(address, { redirectTo: back });
+      if (err) return signInScreen(linkError(err.message), "", address);
+      signInScreen("", `If there's an account for ${address}, a link to set a new password is on its way. Open it in this browser.`, address);
+    });
   on("emailgo", async () => {
-    const email = $<HTMLInputElement>("email")!.value;
-    const password = $<HTMLInputElement>("pw")!.value;
-    let r = await sb.auth.signInWithPassword({ email, password });
-    if (r.error) r = (await sb.auth.signUp({ email, password })) as typeof r;
+    const devEmail = $<HTMLInputElement>("devEmail")!.value;
+    const password = $<HTMLInputElement>("devPw")!.value;
+    let r = await sb.auth.signInWithPassword({ email: devEmail, password });
+    if (r.error) r = (await sb.auth.signUp({ email: devEmail, password })) as typeof r;
     if (r.error) return signInScreen(r.error.message);
     void route();
   });
+}
+
+/** Back from a "set a new password" link (signed in by it): the new password, then on as usual. */
+function newPasswordScreen(error = "") {
+  recovering = true;
+  document.title = "Set a new password — CoDesignFlo";
+  show(`<section class="narrow">
+    <h1>Set a new password</h1>
+    <form id="newPw" style="display:flex;flex-direction:column;gap:10px">
+      <input id="pw" type="password" placeholder="new password (8 characters or more)" autocomplete="new-password" required minlength="8" aria-label="New password">
+      <button class="primary" id="pwGo" type="submit">Save it</button>
+    </form>
+    ${errorLine(error)}
+  </section>`);
+  $<HTMLFormElement>("newPw")!.onsubmit = async (e) => {
+    e.preventDefault();
+    $<HTMLButtonElement>("pwGo")!.disabled = true;
+    const { error: err } = await sb.auth.updateUser({ password: $<HTMLInputElement>("pw")!.value });
+    if (err) return newPasswordScreen(err.message);
+    recovering = false;
+    void route();
+  };
 }
 
 /** Auth's answer to a sign-in link request, said plainly. */
@@ -960,8 +1034,7 @@ let pendingScroll = "";
 /** The privacy policy, the terms, the impressum or cookies and storage: for everyone, signed in or not. */
 function legalPage(which: LegalPage) {
   show(legalHtml(which));
-  const titles: Record<LegalPage, string> = { privacy: "Privacy policy", terms: "Terms", impressum: "Impressum", cookies: "Cookies and storage", security: "Security" };
-  document.title = `${titles[which]} — CoDesignFlo`;
+  document.title = `${LEGAL_TITLES[which]} — CoDesignFlo`;
   window.scrollTo(0, 0);
   wireScroll();
 }
@@ -1151,6 +1224,7 @@ const ADMIN_HOST = !SELFHOST && location.hostname.startsWith("admin.");
 let routeSeq = 0;
 async function route() {
   const seq = ++routeSeq;
+  if (recovering) return newPasswordScreen();
   const legal = location.hash.split("/")[1] as LegalPage | undefined;
   if (legal && LEGAL_PAGES.includes(legal)) {
     stopListening();
@@ -1231,6 +1305,12 @@ async function route() {
   return projectsPage(session);
 }
 
+// /privacy, /terms…: real addresses (pages written out at build time, readable without JavaScript); the app shows
+// them as #/privacy.
+{
+  const path = location.pathname.replace(/^\/|\/$/g, "").replace(/\.html$/, "") as LegalPage;
+  if (!location.hash && LEGAL_PAGES.includes(path)) window.history.replaceState(null, "", `/#/${path}${location.search}`);
+}
 window.addEventListener("hashchange", () => void route());
 // The agent tabs and copy buttons, wherever the connect card is drawn.
 app.addEventListener("click", (e) => {
@@ -1257,7 +1337,8 @@ app.addEventListener("click", (e) => {
 sb.auth.onAuthStateChange((event) => {
   // Back from Figma/GitHub sign-in (the session arrives in the address).
   // After the callback returns: the client can't answer (getSession) from inside its own callback.
-  if (event === "SIGNED_IN") setTimeout(() => void route(), 0);
+  if (event === "PASSWORD_RECOVERY") setTimeout(() => newPasswordScreen(), 0);
+  else if (event === "SIGNED_IN") setTimeout(() => void route(), 0);
 });
 // A self-hosted box: no visit counter (nothing to consent to), and not for search engines.
 if (SELFHOST) {

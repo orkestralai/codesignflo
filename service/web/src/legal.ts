@@ -6,6 +6,13 @@ import { logoSvg } from "./logo.ts";
 
 export const LEGAL_PAGES = ["privacy", "terms", "impressum", "cookies", "security"] as const;
 export type LegalPage = (typeof LEGAL_PAGES)[number];
+export const LEGAL_TITLES: Record<LegalPage, string> = {
+  privacy: "Privacy policy",
+  terms: "Terms",
+  impressum: "Impressum",
+  cookies: "Cookies and storage",
+  security: "Security",
+};
 
 const CONTACT = "contact@orkestralai.com";
 const UPDATED = "Last updated: November 25th, 2026";
@@ -46,12 +53,12 @@ export function footerHtml(): string {
     <div>
       <p class="lp-footer-head">Legal</p>
       <ul>
-        <li><a href="#/privacy">Privacy policy</a></li>
-        <li><a href="#/terms">Terms</a></li>
-        <li><a href="#/impressum">Impressum</a></li>
-        <li><a href="#/cookies">Cookies and storage</a></li>
-        <li><a href="#/cookies" data-consent-open>Cookie settings</a></li>
-        <li><a href="#/security">Security</a></li>
+        <li><a href="/privacy">Privacy policy</a></li>
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/impressum">Impressum</a></li>
+        <li><a href="/cookies">Cookies and storage</a></li>
+        <li><a href="/cookies" data-consent-open>Cookie settings</a></li>
+        <li><a href="/security">Security</a></li>
       </ul>
     </div>
   </div>
@@ -87,7 +94,7 @@ function privacy(): string {
     <p>The controller under the EU General Data Protection Regulation (GDPR) is ${CONTROLLER}. Contact: ${mail}.</p>
     <h2>2. Information we collect</h2>
     ${list([
-      "<b>Your account:</b> when you sign in with Figma, Google or GitHub, your email address, your name as those services give it, and an identifier from them; with a link by email, only your email address. We never see your password for those services.",
+      "<b>Your account:</b> when you sign in with Figma, Google or GitHub, your email address, your name as those services give it, and an identifier from them; with your email (a password or a sign-in link), your email address, and your password stored only as a one-way hash we can't read back. We never see your password for Figma, Google or GitHub.",
       "<b>Your projects:</b> each project's name and members (with their roles), the link to its repository (its first commit and folder, not its code), its settings, and its history: what designers and developers did (claimed, sent to dev, implemented, reviewed), who did it and when.",
       "<b>What Live shows:</b> when a developer syncs, the command-line tool renders the app's Storybook on their own machine and uploads what Live needs: the layout and text of its components and pages, their styles and tokens, which files and stories they come from, the app's images and a screenshot of each page. The app's source code is never uploaded.",
       "<b>Designs:</b> the proposals designers send from Figma, as layers and changes, for the developer's coding agent to implement.",
@@ -111,7 +118,14 @@ function privacy(): string {
       "We don't access, use or disclose your projects' data except as needed to provide the service, or as described here.",
       "A project's owner can delete the project with its history, proposals and Live versions at any time; your Figma file and your code stay as they are.",
     ])}
-    <h2>5. Who receives it</h2>
+    <h2>5. Signing in with Google</h2>
+    ${list([
+      "If you sign in with Google, we receive from Google only your name, your email address and your profile picture (the scopes openid, email and profile). We use them only to create your account, sign you in and show who you are to the people in your projects.",
+      "We don't sell Google user data, use it for advertising, or use it to develop, improve or train AI or machine-learning models, and we don't transfer it to anyone except the providers that run the service (section 6) as needed to provide it.",
+      "CoDesignFlo's use and transfer of information received from Google APIs adheres to the <a href=\"https://developers.google.com/terms/api-services-user-data-policy\" target=\"_blank\" rel=\"noopener\">Google API Services User Data Policy</a>, including the Limited Use requirements.",
+      "You can remove CoDesignFlo's access at any time in your Google account (Security › Your connections to third-party apps), and ask us to delete your account (section 10).",
+    ])}
+    <h2>6. Who receives it</h2>
     ${list([
       "<b>Service providers</b> that run CoDesignFlo for us under data processing agreements: Supabase (database, sign-in and file storage), Vercel (website and service hosting), Stripe (payments; Stripe is also responsible on its own for payment and fraud checks) and Google (Google Workspace: sending our invitation and notification emails).",
       "<b>Figma and GitHub</b>, only to sign you in, under their own privacy policies.",
@@ -120,24 +134,24 @@ function privacy(): string {
     ])}
     <p><b>Where it's processed:</b> your account and project data are stored and processed in the EU: the database and file storage with Supabase in Ireland (AWS eu-west-1), and the service with Vercel in Dublin. Emails are sent through Google's servers, Stripe processes payments in the EU and the United States, and the website's static pages are delivered from Vercel's network nearest to you.</p>
     <p>We don't sell your information. Some providers process data outside the European Economic Area, in particular in the United States. Where they do, transfers rely on the EU–US Data Privacy Framework or on the European Commission's Standard Contractual Clauses.</p>
-    <h2>6. Cookies, browser storage and visit counting</h2>
-    <p>CoDesignFlo sets no cookies. The website keeps only what it needs to work in your browser's storage: your sign-in and your choices. The fonts are served from codesignflo.com itself. With your consent, the website also counts page views with ship-or-die.com (no cookies, no identifiers; it sends the page, the referring site and campaign tags, and ship-or-die.com sees your IP address). See <a href="#/cookies">Cookies and storage</a> for every item, and change your choice any time with <a href="#/cookies" data-consent-open>Cookie settings</a>.</p>
-    <h2>7. How long we keep it</h2>
+    <h2>7. Cookies, browser storage and visit counting</h2>
+    <p>CoDesignFlo sets no cookies. The website keeps only what it needs to work in your browser's storage: your sign-in and your choices. The fonts are served from codesignflo.com itself. With your consent, the website also counts page views with ship-or-die.com (no cookies, no identifiers; it sends the page, the referring site and campaign tags, and ship-or-die.com sees your IP address). See <a href="/cookies">Cookies and storage</a> for every item, and change your choice any time with <a href="/cookies" data-consent-open>Cookie settings</a>.</p>
+    <h2>8. How long we keep it</h2>
     ${list([
       "Account and project data: while your account or the project exists. When you ask us to delete your account, we erase its data within 30 days, except what other members of a shared project still need (such as the history of what you did there) and what the law requires us to keep.",
       "Telemetry: 90 days.",
       "Invoices and accounting records: as long as German commercial and tax law requires (up to 10 years).",
       "Hosting and security logs: as briefly as our providers allow, usually days to weeks.",
     ])}
-    <h2>8. Security</h2>
+    <h2>9. Security</h2>
     <p>We take reasonable measures to protect your information from unauthorized access and disclosure: everything travels encrypted, each project's data is reachable only by its members, and pictures are kept in private storage. No method of transmission or storage is 100% secure, so we cannot guarantee absolute security.</p>
-    <h2>9. Your rights</h2>
+    <h2>10. Your rights</h2>
     <p>You have the right to access your personal data, to have it corrected or deleted, to restrict its processing, to receive it in a portable format, and to object to processing based on our legitimate interests. Where we rely on your consent, you can withdraw it at any time without affecting what was done before. Developers can turn telemetry off for their command-line tool (<code>CODESIGNFLO_TELEMETRY=off</code>). To exercise your rights, write to ${mail}. You can also complain to a data protection supervisory authority, for example the Berlin Commissioner for Data Protection and Freedom of Information.</p>
-    <h2>10. Children</h2>
+    <h2>11. Children</h2>
     <p>CoDesignFlo is a tool for professionals and isn't meant for anyone under 16.</p>
-    <h2>11. Changes to this policy</h2>
+    <h2>12. Changes to this policy</h2>
     <p>We may update this policy to reflect changes in CoDesignFlo or for legal reasons. The updated policy is posted here with its date.</p>
-    <h2>12. Contact</h2>
+    <h2>13. Contact</h2>
     <p>For questions or requests about this policy or your information: ${mail}.</p>`,
   );
 }
@@ -150,7 +164,7 @@ function cookies(): string {
     "Cookies and",
     "storage",
     `<p class="lp-muted">${UPDATED}</p>
-    <p><b>CoDesignFlo sets no cookies.</b> The website keeps a few things in your browser's local storage so it works, loads its fonts from codesignflo.com itself, and counts visits only if you allow it. Here is everything, and you can change your choice any time: <a href="#/cookies" data-consent-open>Cookie settings</a>.</p>
+    <p><b>CoDesignFlo sets no cookies.</b> The website keeps a few things in your browser's local storage so it works, loads its fonts from codesignflo.com itself, and counts visits only if you allow it. Here is everything, and you can change your choice any time: <a href="/cookies" data-consent-open>Cookie settings</a>.</p>
     <h2>Stored in your browser</h2>
     <div class="lp-table"><table><tr><th>Name</th><th>Where</th><th>What for</th><th>How long</th><th>Type</th></tr>
     ${row("sb-…-auth-token", "Local storage, codesignflo.com", "Keeps you signed in", "Until you sign out", "Strictly necessary")}
@@ -169,7 +183,7 @@ function cookies(): string {
       "<b>The Figma plugin</b> keeps your sign-in in Figma's plugin storage on your device.",
       "<b>The command-line tool</b> keeps your sign-in in a file in your home folder.",
     ])}
-    <p>More in the <a href="#/privacy">privacy policy</a>.</p>`,
+    <p>More in the <a href="/privacy">privacy policy</a>.</p>`,
   );
 }
 
@@ -208,6 +222,7 @@ function terms(): string {
     ${list([
       "You are responsible for the content you put in CoDesignFlo and for the apps and files you connect to it, and for having the right to do so.",
       "You must not use CoDesignFlo for any unlawful, harmful or abusive activity, or to interfere with the service or other users.",
+      "You must not use CoDesignFlo to create, store or share sexual or intimate imagery of anyone without their consent, including AI-generated imagery, or any sexual content involving minors. We remove such content and close the accounts involved.",
       "You are responsible for keeping your accounts and your coding agent's access secure.",
     ])}
     <h2>6. Intellectual property</h2>
@@ -216,7 +231,7 @@ function terms(): string {
       "You keep ownership of your code, designs and content. You grant OrkestralAI a license to store, process and display them as needed to provide CoDesignFlo to you and the members of your projects.",
     ])}
     <h2>7. Privacy</h2>
-    <p>Your privacy matters to us. Please read our <a href="#/privacy">privacy policy</a> to understand how we collect, use and protect your information.</p>
+    <p>Your privacy matters to us. Please read our <a href="/privacy">privacy policy</a> to understand how we collect, use and protect your information.</p>
     <h2>8. Limitation of liability</h2>
     <p>CoDesignFlo is provided "as is" and "as available". We do not guarantee that it will be error-free or uninterrupted, or that Live will match your app exactly. To the fullest extent permitted by law, OrkestralAI and its affiliates are not liable for any indirect, incidental or consequential damages arising from your use of CoDesignFlo.</p>
     <h2>9. Third-party services</h2>

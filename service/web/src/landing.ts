@@ -64,18 +64,13 @@ export function landingHtml(c: LandingConfig): string {
   ).join("");
   // Figma Community once the plugin is published there; until then the download (codesignflo.com/plugin.zip).
   const plugin = c.communityUrl
-    ? `<a class="lp-button lp-small" href="${esc(c.communityUrl)}" target="_blank" rel="noopener">Get the Figma plugin</a>`
+    ? `<span class="lp-dl"><a class="lp-button lp-small" href="${esc(c.communityUrl)}" target="_blank" rel="noopener">Get the Figma plugin</a></span>`
     : c.pluginUrl
-      ? `<a class="lp-button lp-small" href="${esc(c.pluginUrl)}" download>Download the Figma plugin</a> <span class="lp-muted">Unzip it somewhere it can stay, then in Figma: Plugins › Development › Import plugin from manifest, and pick its manifest.json.</span>`
+      ? `<span class="lp-dl"><a class="lp-button lp-small" href="${esc(c.pluginUrl)}" download>Download the Figma plugin</a></span><span class="lp-dl-how">Unzip it somewhere it can stay, then in Figma: Plugins › Development › Import plugin from manifest, and pick its manifest.json.</span>`
       : `<span class="lp-muted">Find it in Figma Community.</span>`;
   const methods = c.signIn ?? ["figma", "github"];
-  // Designers start with Figma when it's offered, else on the sign-in page (Google, a link by email).
-  const designStart = methods.includes("figma")
-    ? `<button class="lp-button lp-primary" data-signin="figma">Start free with Figma</button>`
-    : `<a class="lp-button lp-primary" href="#/signin">Start free</a>`;
-  const devStart = methods.includes("github")
-    ? `<button class="lp-button lp-primary" data-signin="github">Start free with GitHub</button>`
-    : `<a class="lp-button lp-primary" href="#/signin">Start free</a>`;
+  // Everyone signs in the way they like (any of the methods, whatever their role): the sign-in page offers them all.
+  const start = `<a class="lp-button lp-primary" href="#/signin">Start free</a>`;
   const names = methods.map((m) => ({ figma: "Figma", google: "Google", github: "GitHub", email: "a link by email" })[m]);
   const signInWith = names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
   return `<div class="lp">
@@ -108,6 +103,21 @@ export function landingHtml(c: LandingConfig): string {
     </div>
   </section>
 
+  <section id="about" class="lp-section lp-white">
+    <div class="lp-container">
+      <div class="lp-head">
+        <p class="lp-eyebrow">About</p>
+        <h2 class="lp-title-sm">What CoDesignFlo <span class="lp-hl-text">is.</span></h2>
+        <p class="lp-lead">A collaboration tool for software teams. What the developers build is drawn in Figma from the code; what the designers change goes back to the code, as instructions their coding agent builds.</p>
+      </div>
+      <div class="lp-grid lp-three lp-about">
+        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Who it's for</p><h3>Teams that code with AI and design in Figma</h3><p>Product teams, agencies and freelancers.</p></div>
+        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Works with</p><h3>Storybook, Figma and your agent</h3><p>Figma desktop (free plan too), and Claude Code, Cursor, VS Code or any agent that speaks MCP.</p></div>
+        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Stays yours</p><h3>Your code never leaves your machine</h3><p>The app is drawn on your computer; only what Figma needs is uploaded.</p></div>
+      </div>
+    </div>
+  </section>
+
   <section id="how" class="lp-section lp-dark">
     <div class="lp-container">
       <div class="lp-head">
@@ -130,9 +140,9 @@ export function landingHtml(c: LandingConfig): string {
         <div class="lp-card">
           <p class="lp-eyebrow lp-blue-text">For designers</p>
           <h3>Bring your file</h3>
-          <div class="lp-card-cta">${designStart}<span class="lp-muted">${FREE_SENDS} sends to dev free, no card</span></div>
+          <div class="lp-card-cta">${start}<span class="lp-muted">${FREE_SENDS} sends to dev free, no card</span></div>
           <ol>
-            <li>Install the CoDesignFlo plugin in the Figma desktop app. ${plugin}</li>
+            <li>Install the CoDesignFlo plugin in the Figma desktop app.${plugin}</li>
             <li>Open your team's file, run the plugin, sign in and choose <i>Start a project for this file</i>.</li>
             <li>Invite your developer from <i>People</i>. Live appears after their first sync.</li>
             <li>Keep the file open while Live updates: the plugin applies each update and lists what changed under <i>Needs you</i>.</li>
@@ -142,7 +152,7 @@ export function landingHtml(c: LandingConfig): string {
         <div class="lp-card">
           <p class="lp-eyebrow lp-blue-text">For developers</p>
           <h3>Bring your agent</h3>
-          <div class="lp-card-cta">${devStart}<span class="lp-muted">Free for developers, always</span></div>
+          <div class="lp-card-cta">${start}<span class="lp-muted">Free for developers, always</span></div>
           <ol>
             <li>Connect your coding agent to CoDesignFlo. With Claude Code:
               <pre>claude mcp add --transport http --scope user \\
@@ -190,7 +200,7 @@ export function landingHtml(c: LandingConfig): string {
             <li>Updates, backups and email notifications are taken care of.</li>
             <li>Developers free; designers ${FREE_SENDS} sends free, then a seat (<a href="#pricing" data-scroll="pricing">pricing</a>).</li>
           </ul>
-          <a class="lp-button lp-primary" href="#start" data-scroll="start">Start free</a>
+          <div class="lp-card-foot"><a class="lp-button lp-primary" href="#start" data-scroll="start">Start free</a></div>
         </div>
         <div class="lp-card">
           <p class="lp-eyebrow lp-blue-text">On your own server</p>
@@ -201,8 +211,10 @@ export function landingHtml(c: LandingConfig): string {
             <li>No billing, no limits. Sign-in by email, invite-only, and everything stays on your server: nothing is sent to us.</li>
             <li>Each designer downloads a Figma plugin made for your server from its Set up page.</li>
           </ul>
-          <p class="lp-note">Read the ${repoLink("/blob/main/selfhost/GUIDE.md", "self-hosting guide")}: where to run it, HTTPS, emails, backups and updates.</p>
-          ${REPO_URL ? `<a class="lp-button lp-outline" href="${REPO_URL}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
+          <div class="lp-card-foot">
+            <p class="lp-note">Read the ${repoLink("/blob/main/selfhost/GUIDE.md", "self-hosting guide")}: where to run it, HTTPS, emails, backups and updates.</p>
+            ${REPO_URL ? `<a class="lp-button lp-outline" href="${REPO_URL}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
+          </div>
         </div>
       </div>
       <p class="lp-vat">The Figma plugin, the CLI and the engine are MIT-licensed. The service and the self-hosting setup are under the Functional Source License: free for your own use, including running it for your team or your clients, not for offering a competing service; each release becomes Apache 2.0 after two years.</p>
@@ -239,7 +251,7 @@ export function landingHtml(c: LandingConfig): string {
         </div>
       </div>
       <p class="lp-vat">${VAT_NOTE}</p>
-      <p class="lp-vat">Invite a designer: their second month is free, and you get a month free when it starts. <a href="#/terms">Terms</a></p>
+      <p class="lp-vat">Invite a designer: their second month is free, and you get a month free when it starts. <a href="/terms">Terms</a></p>
       <p class="lp-vat">Prices are for the hosted service. On your own server, CoDesignFlo is free: no seats, no limits. <a href="#selfhost" data-scroll="selfhost">Self-hosting</a></p>
     </div>
   </section>
