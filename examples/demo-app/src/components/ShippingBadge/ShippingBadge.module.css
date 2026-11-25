@@ -1,0 +1,13 @@
+/* A developer's first draft: built like the shop's other badges, from the design system's tokens, except its
+   colour, a flat grey picked in a hurry (the designer gives it the brand's). */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-sm);
+  background: #9e9e9e;
+  color: var(--color-text-on-brand);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 16px;
+}

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /* Figma-like: 11px UI type, compact controls, one line per row; colours from Figma's theme. */
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 11px/16px Inter, system-ui, sans-serif; background: var(--figma-color-bg); color: var(--figma-color-text); }
+      svg { display: block; flex: none; }
+      header { position: sticky; top: 0; z-index: 3; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; padding: 10px 12px 8px; background: var(--figma-color-bg); border-bottom: 1px solid var(--figma-color-border); }
+      header h1 { margin: 0; font-size: 12px; font-weight: 600; line-height: 16px; }
+      header .meta { grid-column: 1; display: flex; gap: 8px; align-items: center; color: var(--figma-color-text-secondary); white-space: nowrap; overflow: hidden; }
+      .conn { display: inline-flex; align-items: center; gap: 5px; }
+      .conn::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--figma-color-icon-tertiary, #b3b3b3); }
+      .conn.on::before { background: var(--figma-color-icon-success, #14ae5c); }
+      #sub::before { content: "·"; margin-right: 8px; }
+      #sub:empty { display: none; }
+      /* shared through the service: the developer's machine needn't be online, so only "connected" is worth showing */
+      body.shared .conn:not(.on) { display: none; }
+      body.shared .conn:not(.on) + #sub::before { content: none; }
+      main { padding: 8px 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+      .notice { padding: 8px 10px; border-radius: 6px; background: var(--figma-color-bg-secondary); }
+      .notice.warn { background: var(--figma-color-bg-warning-tertiary, var(--figma-color-bg-secondary)); }
+      .notice .code { display: block; margin-top: 6px; font: 600 22px/1.2 ui-monospace, monospace; letter-spacing: 6px; }
+      .hint { padding: 4px; color: var(--figma-color-text-secondary); }
+      .hint.foot { color: var(--figma-color-text-tertiary); }
+      .hint.warn { color: var(--figma-color-text-warning); }
+      /* search */
+      .search { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: 5px; background: var(--figma-color-bg-secondary); color: var(--figma-color-icon-secondary, var(--figma-color-text-secondary)); }
+      .search input { flex: 1; min-width: 0; height: 28px; border: 0; padding: 0; background: transparent; color: var(--figma-color-text); font: inherit; outline: none; }
+      /* sections */
+      .sec-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 4px; font-weight: 600; color: var(--figma-color-text-secondary); }
+      .sec-head:hover, .row-main:hover { background: var(--figma-color-bg-hover); }
+      .sec-act { display: flex; justify-content: flex-end; padding: 0 4px 4px; }
+      .sec-act button.link { all: unset; cursor: pointer; color: var(--figma-color-text-brand, #0d99ff); }
+      .sec-head .count { margin-left: auto; font-weight: 500; color: var(--figma-color-text-tertiary); }
+      .chev { color: var(--figma-color-icon-tertiary, var(--figma-color-text-tertiary)); }
+      .rows { display: flex; flex-direction: column; gap: 2px; }
+      /* rows */
+      .row { position: relative; border-radius: 6px; }
+      .row.open { background: var(--figma-color-bg-secondary); }
+      button.danger { background: var(--figma-color-bg-danger, #f24822); color: #fff; border-color: transparent; }
+      button.link.danger-link { color: var(--figma-color-text-danger, #f24822); margin-left: 8px; }
+      .row.selected { box-shadow: inset 0 0 0 1.5px var(--figma-color-border-selected, #0d99ff); background: var(--figma-color-bg-selected, rgba(13, 153, 255, 0.08)); }
+      .row-line { display: flex; align-items: center; gap: 6px; padding-right: 4px; }
+      .row-main { all: unset; box-sizing: border-box; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: 6px; }
+      .thumb { width: 40px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: var(--figma-color-bg-secondary); border: 1px solid var(--figma-color-border); overflow: hidden; }
+      .thumb img { max-width: 100%; max-height: 100%; }
+      .text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .name { display: flex; align-items: center; gap: 4px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .status { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--figma-color-text-secondary); white-space: nowrap; }
+      .status > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+      .row-body { padding: 0 8px 8px 56px; color: var(--figma-color-text-secondary); overflow-wrap: anywhere; }
+      .row-body b { color: var(--figma-color-text); font-weight: 500; }
+      .dot-pending { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--figma-color-icon-brand, #0d99ff); }
+      .chip { flex: none; font-size: 10px; font-weight: 500; line-height: 16px; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+      .b-in_sync, .b-ignored { display: none; }
+      .b-unseen, .b-code_new, .b-design_new { background: var(--figma-color-bg-brand); color: var(--figma-color-text-onbrand); }
+      .b-in_design { background: var(--figma-color-bg-component); color: var(--figma-color-text-oncomponent); }
+      .b-ready_for_dev { background: var(--figma-color-bg-success); color: var(--figma-color-text-onsuccess); }
+      .b-conflict { background: var(--figma-color-bg-warning); color: var(--figma-color-text-onwarning); }
+      /* buttons and menu */
+      button { font: inherit; font-weight: 500; height: 24px; padding: 0 8px; border-radius: 5px; border: 1px solid var(--figma-color-border-strong, var(--figma-color-border)); background: var(--figma-color-bg); color: var(--figma-color-text); white-space: nowrap; flex: none; }
+      button.primary { background: var(--figma-color-bg-brand); color: var(--figma-color-text-onbrand); border-color: transparent; }
+      button.icon { width: 24px; padding: 0; border: 0; background: transparent; color: var(--figma-color-icon-secondary, var(--figma-color-text-secondary)); display: inline-flex; align-items: center; justify-content: center; }
+      button.icon:hover { background: var(--figma-color-bg-hover); }
+      button.wide { width: 100%; height: 32px; }
+      button:disabled { opacity: 0.4; }
+      .menu { position: absolute; right: 4px; top: 30px; z-index: 4; min-width: 160px; padding: 4px; border-radius: 8px; background: var(--figma-color-bg-menu, #1e1e1e); box-shadow: 0 5px 17px rgba(0, 0, 0, 0.2), 0 2px 7px rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; }
+      .menu button { border: 0; background: transparent; color: var(--figma-color-text-menu, #fff); text-align: left; font-weight: 400; border-radius: 4px; }
+      .menu button:hover { background: var(--figma-color-bg-menu-hover, #0d99ff); }
+      .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+      /* cards (review screen, new design) */
+      .card { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--figma-color-border); background: var(--figma-color-bg); overflow-wrap: anywhere; }
+      .card.quiet { background: var(--figma-color-bg-secondary); border-color: transparent; }
+      .card.new { background: var(--figma-color-bg-secondary); border-style: dashed; }
+      .card.demo { border-color: var(--figma-color-border-brand-strong, #0d99ff); background: var(--figma-color-bg-brand-tertiary, #e5f4ff); }
+      /* The demo walkthrough: what to click stays bright, the rest dims; the step's card sits beside it. */
+      #tour-spot { position: fixed; z-index: 50; pointer-events: none; border-radius: 8px; box-shadow: 0 0 0 2px var(--figma-color-border-brand-strong, #0d99ff), 0 0 0 9999px rgba(0, 0, 0, 0.45); transition: all 0.15s ease; }
+      #tour-tip { position: fixed; z-index: 51; left: 8px; right: 8px; background: var(--figma-color-bg, #fff); color: var(--figma-color-text, #1e1e1e); border: 1px solid var(--figma-color-border-brand-strong, #0d99ff); border-radius: 10px; padding: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); font-size: 12px; line-height: 1.5; }
+      #tour-spot.soft { box-shadow: 0 0 0 2px var(--figma-color-border-brand-strong, #0d99ff); }
+      #tour-tip.min { left: auto; right: 8px; top: auto; bottom: 8px; padding: 0; border-radius: 16px; }
+      #tour-tip .tour-pill { border: 0; background: transparent; padding: 6px 12px; font-weight: 700; color: var(--figma-color-text-brand, #0d99ff); }
+      #tour-tip .tour-min { float: right; border: 0; background: transparent; font-size: 14px; line-height: 1; padding: 0 2px; color: var(--figma-color-text-secondary, #666); }
+      #tour-tip .tour-wait { margin-top: 8px; font-weight: 600; color: var(--figma-color-text-brand, #0d99ff); }
+      #tour-tip .tour-slow { margin-top: 4px; font-weight: 400; color: var(--figma-color-text-secondary, #666); }
+      #tour-tip .tour-dots { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; vertical-align: -1px; animation: tour-spin 0.8s linear infinite; }
+      @keyframes tour-spin { to { transform: rotate(360deg); } }
+      /* The demo: Alex's coding agent at work, line after line. */
+      #tour-tip .tour-term { margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: #0d1117; color: #c9d1d9; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 150px; overflow: hidden; }
+      #tour-tip .tour-term > div { opacity: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: tour-line 0.25s ease forwards; }
+      #tour-tip .tour-term .t-p { display: inline-block; width: 14px; color: #8b949e; }
+      #tour-tip .tour-term .t-cmd { color: #e6edf3; }
+      #tour-tip .tour-term .t-ok { color: #3fb950; }
+      #tour-tip .tour-term .t-del { color: #f85149; background: rgba(248, 81, 73, 0.12); }
+      #tour-tip .tour-term .t-add { color: #3fb950; background: rgba(63, 185, 80, 0.12); }
+      #tour-tip .tour-term .t-cursor { width: 7px; height: 13px; background: #c9d1d9; animation: tour-line 0.2s ease forwards, tour-blink 1s step-end infinite; }
+      @keyframes tour-line { to { opacity: 1; } }
+      @keyframes tour-blink { 50% { background: transparent; } }
+      #tour-tip .tour-count { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--figma-color-text-brand, #0d99ff); }
+      #tour-tip .tour-title { font-size: 13px; font-weight: 700; margin: 2px 0 4px; }
+      #tour-tip .tour-actions { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
+      #tour-tip .tour-gap { flex: 1; }
+      .demo-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 8px; border-radius: 8px; background: var(--figma-color-bg-brand-tertiary, #e5f4ff); font-size: 11px; line-height: 1.35; }
+      .demo-bar .demo-what { flex: 1; min-width: 0; color: var(--figma-color-text-secondary, #666); }
+      .demo-bar .demo-actions { display: flex; gap: 4px; flex: none; }
+      .demo-actions button { height: 22px; padding: 0 8px; font-size: 11px; white-space: nowrap; }
+      .badge-demo { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 4px; background: var(--figma-color-bg-brand, #0d99ff); color: var(--figma-color-text-onbrand, #fff); align-self: center; }
+      .card .what b { font-weight: 600; }
+      .card .what { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 24px; }
+      .tools { display: flex; gap: 2px; flex: none; }
+      .vals { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-family: ui-monospace, monospace; font-size: 10px; }
+      .vals span:not(.arrow) { padding: 1px 6px; border-radius: 4px; background: var(--figma-color-bg-secondary); }
+      .vals .arrow { color: var(--figma-color-text-tertiary); }
+      .desc { color: var(--figma-color-text-secondary); }
+      .ask { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; color: var(--figma-color-text-secondary); }
+      .ask label { display: flex; gap: 6px; align-items: center; color: var(--figma-color-text); }
+      .ask input[type="radio"] { margin: 0; }
+      .warn { display: flex; gap: 6px; align-items: flex-start; color: var(--figma-color-text-warning); }
+      .warn[hidden] { display: none; }
+      .guide .step { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; color: var(--figma-color-text-secondary); }
+      .guide .step.next { color: var(--figma-color-text); }
+      .guide .step.done b { font-weight: 400; text-decoration: line-through; }
+      .guide .tick { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--figma-color-border-strong, #d9d9d9); font-size: 9px; line-height: 13px; text-align: center; margin-top: 1px; }
+      .guide .step.done .tick { background: var(--figma-color-bg-success, #14ae5c); border-color: transparent; color: #fff; }
+      .guide button.link, .guide-screen button.link { all: unset; cursor: pointer; color: var(--figma-color-text-brand, #0d99ff); }
+      .guide-screen .g-pages { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; color: var(--figma-color-text-secondary); }
+      .guide-screen .g-pages b, .guide-screen summary b { color: var(--figma-color-text); font-weight: 600; }
+      .guide-screen details { border-top: 1px solid var(--figma-color-border, #e6e6e6); padding: 6px 0; }
+      .guide-screen summary { cursor: pointer; list-style: none; }
+      .guide-screen summary::-webkit-details-marker { display: none; }
+      .guide-screen summary::before { content: "▸ "; color: var(--figma-color-text-secondary); }
+      .guide-screen details[open] summary::before { content: "▾ "; }
+      .guide-screen .g-when { color: var(--figma-color-text-secondary); font-size: 11px; }
+      .guide-screen .g-steps { margin: 6px 0 2px 18px; padding: 0; color: var(--figma-color-text-secondary); }
+      .guide-screen .g-steps li { margin: 3px 0; }
+      .guide-screen .g-steps b, .guide-screen .desc b { color: var(--figma-color-text); font-weight: 500; }
+      .guide-screen .g-legend { margin-top: 8px; }
+      .person select { max-width: 150px; font: inherit; border: 1px solid var(--figma-color-border); border-radius: 4px; background: var(--figma-color-bg); color: var(--figma-color-text); }
+      .card .actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+      .busy { position: sticky; top: 49px; z-index: 2; display: flex; flex-direction: column; gap: 4px; padding: 6px 12px; background: var(--figma-color-bg); border-bottom: 1px solid var(--figma-color-border); color: var(--figma-color-text-secondary); }
+      .busy[hidden] { display: none; }
+      .busy-bar { display: block; position: relative; height: 3px; margin-top: 6px; border-radius: 2px; background: var(--figma-color-bg-secondary); overflow: hidden; }
+      .busy-bar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--figma-color-bg-brand, #0d99ff); transition: width 0.3s; }
+      .busy-bar.indeterminate { margin-top: 0; }
+      .busy-bar.indeterminate > span { width: 30%; animation: busy 1.1s ease-in-out infinite; }
+      @keyframes busy { from { left: -30%; } to { left: 100%; } }
+      .notice .busy-bar { width: 100%; }
+      .kept { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+      .kept-row { display: flex; justify-content: space-between; gap: 8px; color: var(--figma-color-text-secondary); }
+      .kept-row button.link, .row-body button.link { all: unset; cursor: pointer; color: var(--figma-color-text-brand, #0d99ff); flex: none; }
+      .person { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+      .person .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .person .role { color: var(--figma-color-text-secondary); flex: none; }
+      .person-mail { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--figma-color-text-secondary); padding: 0 0 4px; }
+      .person-mail .warn-text { color: var(--figma-color-text-danger, #e5484d); }
+      .card button.link { all: unset; cursor: pointer; color: var(--figma-color-text-brand, #0d99ff); }
+      .group { margin-top: 8px; font-weight: 600; color: var(--figma-color-text-secondary); }
+      .seg { display: flex; padding: 2px; border-radius: 6px; background: var(--figma-color-bg); border: 1px solid var(--figma-color-border); }
+      .seg label { flex: 1; text-align: center; padding: 3px 0; border-radius: 4px; color: var(--figma-color-text-secondary); }
+      .seg label.on { background: var(--figma-color-bg-secondary); color: var(--figma-color-text); font-weight: 500; }
+      .seg input { display: none; }
+      .seg.mini { flex: none; padding: 1px; }
+      .seg.mini label { flex: none; padding: 1px 6px; font-size: 10px; white-space: nowrap; }
+      textarea, input[type="text"], input[type="email"] { width: 100%; font: inherit; padding: 6px 8px; border-radius: 5px; border: 1px solid var(--figma-color-border); background: var(--figma-color-bg); color: var(--figma-color-text); }
+      textarea { min-height: 52px; resize: vertical; }
+      textarea:focus, input[type="text"]:focus, input[type="email"]:focus { outline: 1px solid var(--figma-color-border-brand-strong, #0d99ff); border-color: transparent; }
+      /* review screen */
+      .screen-head { display: flex; gap: 6px; align-items: flex-start; padding: 2px 0 6px; }
+      .screen-head .name { white-space: normal; font-weight: 600; }
+      .screen-head .status { white-space: normal; }
+      .screen-body { display: flex; flex-direction: column; gap: 6px; }
+      .screen-foot { position: sticky; bottom: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 0 4px; background: var(--figma-color-bg); }
+      #toast { position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 5; padding: 8px 10px; border-radius: 6px; background: var(--figma-color-bg-inverse); color: var(--figma-color-text-oninverse); display: none; }
+      button.fold { grid-row: 1 / span 2; grid-column: 2; width: 32px; height: 32px; padding: 0; border: 1px solid var(--figma-color-border); border-radius: 6px; background: transparent; color: var(--figma-color-icon, var(--figma-color-text)); font-size: 18px; line-height: 1; cursor: pointer; }
+      button.fold:hover { background: var(--figma-color-bg-hover); }
+      body.collapsed main, body.collapsed #toast { display: none; }
+      body.collapsed header { border-bottom: 0; }
+      /* the header's toolbar: Guide, People, who's signed in, Sign in / out */
+      header .bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+      header .bar:empty { display: none; }
+      header .bar button { height: 22px; padding: 0 8px; }
+      header .bar button.on { background: var(--figma-color-bg-selected, #e5f4ff); border-color: var(--figma-color-border-selected, #0d99ff); }
+      header .bar .spacer { flex: 1; }
+      header .bar .who { color: var(--figma-color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+      header .bar button.quiet { border-color: transparent; background: transparent; color: var(--figma-color-text-secondary); padding: 0 4px; }
+      header .bar button.quiet:hover { background: var(--figma-color-bg-hover); color: var(--figma-color-text); }
+      body.collapsed header .bar { display: none; }
+      .version { padding: 0 12px 10px; text-align: right; font-size: 10px; color: var(--figma-color-text-tertiary); user-select: text; }
+      body.collapsed .version { display: none; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>CoDesignFlo</h1>
+      <button type="button" id="fold" class="fold" title="Collapse">▾</button>
+      <div class="meta"><span id="conn" class="conn"><span id="conn-text">Developer offline</span></span><span id="sub"></span></div>
+      <div id="cloud" class="bar"></div>
+    </header>
+    <div id="busy" class="busy" hidden><span class="busy-bar indeterminate"><span></span></span><span id="busy-text"></span></div>
+    <main id="main"></main>
+    <div id="version" class="version"></div>
+    <div id="toast" role="status"></div>
+    <!-- SCRIPT -->
+  </body>
+</html>

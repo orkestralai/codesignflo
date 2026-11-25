@@ -1,0 +1,30 @@
+# The build needs the root manifests, packages/core, packages/cli (manifest and src), packages/plugin, service and
+# selfhost/scripts.
+**/node_modules
+**/dist
+**/.DS_Store
+.git
+.vercel
+.claude
+release
+resources
+tests
+e2e
+examples
+demo-video
+figma-community
+docs
+scripts
+packages/cli/*
+!packages/cli/package.json
+!packages/cli/src
+service/web/dist
+service/server/dist
+service/test
+selfhost/.env
+selfhost/backups
+*.mov
+*.png
+!service/web/public/**
+*.zip
+.env*

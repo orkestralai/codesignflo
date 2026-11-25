@@ -1,0 +1,1497 @@
+{
+  "clipsContent": true,
+  "componentPropertyDefinitions": {
+    "Sale": {
+      "defaultValue": "false",
+      "type": "VARIANT",
+      "variantOptions": ["false", "true"]
+    },
+    "Title": {
+      "defaultValue": "long",
+      "type": "VARIANT",
+      "variantOptions": ["long", "short"]
+    }
+  },
+  "constraints": {
+    "horizontal": "MIN",
+    "vertical": "MIN"
+  },
+  "cornerRadius": 5,
+  "counterAxisSizingMode": "AUTO",
+  "fills": [],
+  "height": 652,
+  "layout": {
+    "counterAxisAlignItems": "MIN",
+    "counterAxisSpacing": 24,
+    "itemSpacing": 24,
+    "layoutWrap": "WRAP",
+    "mode": "HORIZONTAL",
+    "paddingBottom": 24,
+    "paddingLeft": 24,
+    "paddingRight": 24,
+    "paddingTop": 24,
+    "primaryAxisAlignItems": "MIN",
+    "strokesIncludedInLayout": true
+  },
+  "name": "card.product",
+  "opacity": 1,
+  "primaryAxisSizingMode": "FIXED",
+  "rotation": 0,
+  "type": "COMPONENT_SET",
+  "visible": true,
+  "width": 1000,
+  "k": "card.product",
+  "children": [
+    {
+      "boundVariables": {
+        "bottomLeftRadius": ["var(Tokens/radius/md)"],
+        "bottomRightRadius": ["var(Tokens/radius/md)"],
+        "fills": ["var(Tokens/color/surface/default)"],
+        "strokes": ["var(Tokens/color/border/default)"],
+        "topLeftRadius": ["var(Tokens/radius/md)"],
+        "topRightRadius": ["var(Tokens/radius/md)"]
+      },
+      "clipsContent": true,
+      "cornerRadius": 8,
+      "counterAxisSizingMode": "FIXED",
+      "fills": [
+        {
+          "boundVariables": {
+            "color": "var(Tokens/color/surface/default)"
+          },
+          "color": {
+            "b": 1,
+            "g": 1,
+            "r": 1
+          },
+          "opacity": 1,
+          "type": "SOLID",
+          "visible": true
+        }
+      ],
+      "height": 302,
+      "layout": {
+        "counterAxisAlignItems": "MIN",
+        "itemSpacing": 0,
+        "layoutWrap": "NO_WRAP",
+        "mode": "VERTICAL",
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "paddingRight": 0,
+        "paddingTop": 0,
+        "primaryAxisAlignItems": "MIN",
+        "strokesIncludedInLayout": true
+      },
+      "layoutSizingHorizontal": "FIXED",
+      "layoutSizingVertical": "HUG",
+      "name": "Sale=false, Title=long",
+      "opacity": 1,
+      "primaryAxisSizingMode": "AUTO",
+      "rotation": 0,
+      "strokeAlign": "INSIDE",
+      "strokeWeight": 1,
+      "strokes": [
+        {
+          "boundVariables": {
+            "color": "var(Tokens/color/border/default)"
+          },
+          "color": {
+            "b": 0.9059,
+            "g": 0.8941,
+            "r": 0.8941
+          },
+          "opacity": 1,
+          "type": "SOLID",
+          "visible": true
+        }
+      ],
+      "type": "COMPONENT",
+      "variantProperties": {
+        "Sale": "false",
+        "Title": "long"
+      },
+      "visible": true,
+      "width": 320,
+      "k": "card.product/Sale=false, Title=long",
+      "children": [
+        {
+          "cornerRadius": 0,
+          "fills": [
+            {
+              "color": {
+                "b": 1,
+                "g": 0.9059,
+                "r": 0.8784
+              },
+              "opacity": 1,
+              "type": "SOLID",
+              "visible": true
+            }
+          ],
+          "height": 160,
+          "layoutAlign": "STRETCH",
+          "layoutSizingHorizontal": "FILL",
+          "layoutSizingVertical": "FIXED",
+          "name": "image",
+          "opacity": 1,
+          "rotation": 0,
+          "type": "RECTANGLE",
+          "visible": true,
+          "width": 318,
+          "k": "card.product/Sale=false, Title=long/image"
+        },
+        {
+          "boundVariables": {
+            "itemSpacing": ["var(Tokens/space/2)"],
+            "paddingBottom": ["var(Tokens/space/3)"],
+            "paddingLeft": ["var(Tokens/space/3)"],
+            "paddingRight": ["var(Tokens/space/3)"],
+            "paddingTop": ["var(Tokens/space/3)"]
+          },
+          "clipsContent": false,
+          "cornerRadius": 0,
+          "counterAxisSizingMode": "FIXED",
+          "fills": [],
+          "height": 140,
+          "layout": {
+            "counterAxisAlignItems": "MIN",
+            "itemSpacing": 8,
+            "layoutWrap": "NO_WRAP",
+            "mode": "VERTICAL",
+            "paddingBottom": 12,
+            "paddingLeft": 12,
+            "paddingRight": 12,
+            "paddingTop": 12,
+            "primaryAxisAlignItems": "MIN"
+          },
+          "layoutAlign": "STRETCH",
+          "layoutSizingHorizontal": "FILL",
+          "layoutSizingVertical": "HUG",
+          "name": "body",
+          "opacity": 1,
+          "primaryAxisSizingMode": "AUTO",
+          "rotation": 0,
+          "type": "FRAME",
+          "visible": true,
+          "width": 318,
+          "k": "card.product/Sale=false, Title=long/body",
+          "children": [
+            {
+              "boundVariables": {
+                "itemSpacing": ["var(Tokens/space/2)"]
+              },
+              "clipsContent": false,
+              "cornerRadius": 0,
+              "counterAxisSizingMode": "AUTO",
+              "fills": [],
+              "height": 48,
+              "layout": {
+                "counterAxisAlignItems": "MIN",
+                "itemSpacing": 8,
+                "layoutWrap": "NO_WRAP",
+                "mode": "HORIZONTAL",
+                "paddingBottom": 0,
+                "paddingLeft": 0,
+                "paddingRight": 0,
+                "paddingTop": 0,
+                "primaryAxisAlignItems": "SPACE_BETWEEN"
+              },
+              "layoutAlign": "STRETCH",
+              "layoutSizingHorizontal": "FILL",
+              "layoutSizingVertical": "HUG",
+              "name": "header",
+              "opacity": 1,
+              "primaryAxisSizingMode": "FIXED",
+              "rotation": 0,
+              "type": "FRAME",
+              "visible": true,
+              "width": 294,
+              "k": "card.product/Sale=false, Title=long/body/header",
+              "children": [
+                {
+                  "boundVariables": {
+                    "fills": ["var(Tokens/color/text/primary)"],
+                    "fontSize": ["var(Tokens/font/size/lg)"]
+                  },
+                  "characters": "Wool scarf with a long name that wraps onto two lines",
+                  "fills": [
+                    {
+                      "boundVariables": {
+                        "color": "var(Tokens/color/text/primary)"
+                      },
+                      "color": {
+                        "b": 0.1059,
+                        "g": 0.0941,
+                        "r": 0.0941
+                      },
+                      "opacity": 1,
+                      "type": "SOLID",
+                      "visible": true
+                    }
+                  ],
+                  "fontName": {
+                    "family": "Inter",
+                    "style": "Semi Bold",
+                    "variationSettings": {
+                      "slnt": 0,
+                      "wght": 600
+                    }
+                  },
+                  "fontSize": 16,
+                  "height": 48,
+                  "layoutGrow": 1,
+                  "layoutSizingHorizontal": "FILL",
+                  "layoutSizingVertical": "HUG",
+                  "letterSpacing": {
+                    "unit": "PIXELS",
+                    "value": 0
+                  },
+                  "lineHeight": {
+                    "unit": "PIXELS",
+                    "value": 24
+                  },
+                  "maxLines": 2,
+                  "name": "title",
+                  "opacity": 1,
+                  "paragraphIndent": 0,
+                  "paragraphSpacing": 0,
+                  "rotation": 0,
+                  "textAlignHorizontal": "LEFT",
+                  "textAlignVertical": "TOP",
+                  "textAutoResize": "HEIGHT",
+                  "textCase": "ORIGINAL",
+                  "textDecoration": "NONE",
+                  "textTruncation": "ENDING",
+                  "textWrapStyle": "AUTO",
+                  "type": "TEXT",
+                  "visible": true,
+                  "width": 294,
+                  "k": "card.product/Sale=false, Title=long/body/header/title"
+                }
+              ]
+            },
+            {
+              "boundVariables": {
+                "fills": ["var(Tokens/color/text/secondary)"],
+                "fontSize": ["var(Tokens/font/size/md)"]
+              },
+              "characters": "€49",
+              "fills": [
+                {
+                  "boundVariables": {
+                    "color": "var(Tokens/color/text/secondary)"
+                  },
+                  "color": {
+                    "b": 0.3569,
+                    "g": 0.3216,
+                    "r": 0.3216
+                  },
+                  "opacity": 1,
+                  "type": "SOLID",
+                  "visible": true
+                }
+              ],
+              "fontName": {
+                "family": "Inter",
+                "style": "Medium",
+                "variationSettings": {
+                  "slnt": 0,
+                  "wght": 500
+                }
+              },
+              "fontSize": 14,
+              "height": 17,
+              "layoutSizingHorizontal": "HUG",
+              "layoutSizingVertical": "HUG",
+              "letterSpacing": {
+                "unit": "PIXELS",
+                "value": 0
+              },
+              "lineHeight": {
+                "unit": "AUTO"
+              },
+              "maxLines": null,
+              "name": "price",
+              "opacity": 1,
+              "paragraphIndent": 0,
+              "paragraphSpacing": 0,
+              "rotation": 0,
+              "textAlignHorizontal": "LEFT",
+              "textAlignVertical": "TOP",
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "textTruncation": "DISABLED",
+              "textWrapStyle": "AUTO",
+              "type": "TEXT",
+              "visible": true,
+              "width": 28,
+              "k": "card.product/Sale=false, Title=long/body/price"
+            },
+            {
+              "boundVariables": {
+                "bottomLeftRadius": ["var(Tokens/radius/md)"],
+                "bottomRightRadius": ["var(Tokens/radius/md)"],
+                "fills": ["var(Tokens/color/brand/primary)"],
+                "itemSpacing": ["var(Tokens/space/2)"],
+                "paddingBottom": ["var(Tokens/space/2)"],
+                "paddingLeft": ["var(Tokens/space/4)"],
+                "paddingRight": ["var(Tokens/space/4)"],
+                "paddingTop": ["var(Tokens/space/2)"],
+                "topLeftRadius": ["var(Tokens/radius/md)"],
+                "topRightRadius": ["var(Tokens/radius/md)"]
+              },
+              "clipsContent": false,
+              "componentProperties": {
+                "Icon": {
+                  "type": "VARIANT",
+                  "value": "false"
+                },
+                "Size": {
+                  "type": "VARIANT",
+                  "value": "md"
+                },
+                "State": {
+                  "type": "VARIANT",
+                  "value": "default"
+                },
+                "Variant": {
+                  "type": "VARIANT",
+                  "value": "primary"
+                }
+              },
+              "cornerRadius": 8,
+              "counterAxisSizingMode": "AUTO",
+              "fills": [
+                {
+                  "boundVariables": {
+                    "color": "var(Tokens/color/brand/primary)"
+                  },
+                  "color": {
+                    "b": 0.898,
+                    "g": 0.2745,
+                    "r": 0.3098
+                  },
+                  "opacity": 1,
+                  "type": "SOLID",
+                  "visible": true
+                }
+              ],
+              "height": 35,
+              "layout": {
+                "counterAxisAlignItems": "CENTER",
+                "itemSpacing": 8,
+                "layoutWrap": "NO_WRAP",
+                "mode": "HORIZONTAL",
+                "paddingBottom": 8,
+                "paddingLeft": 16,
+                "paddingRight": 16,
+                "paddingTop": 8,
+                "primaryAxisAlignItems": "MIN",
+                "strokesIncludedInLayout": true
+              },
+              "layoutSizingHorizontal": "HUG",
+              "layoutSizingVertical": "HUG",
+              "name": "button",
+              "opacity": 1,
+              "primaryAxisSizingMode": "AUTO",
+              "rotation": 0,
+              "strokeAlign": "INSIDE",
+              "strokeWeight": 1,
+              "strokes": [
+                {
+                  "color": {
+                    "b": 0,
+                    "g": 0,
+                    "r": 0
+                  },
+                  "opacity": 0,
+                  "type": "SOLID",
+                  "visible": true
+                }
+              ],
+              "type": "INSTANCE",
+              "visible": true,
+              "width": 110,
+              "k": "card.product/Sale=false, Title=long/body/button",
+              "mainComponent": {
+                "componentSetName": "button",
+                "key": "0805f914bc8635d415cfb84a91b75dbc060710d0",
+                "name": "Icon=false, Size=md, State=default, Variant=primary"
+              },
+              "overriddenFields": ["characters", "height", "pluginData", "styledTextSegments", "width"],
+              "children": [
+                {
+                  "boundVariables": {
+                    "fills": ["var(Tokens/color/text/on-brand)"],
+                    "fontSize": ["var(Tokens/font/size/md)"]
+                  },
+                  "characters": "Add to cart",
+                  "fills": [
+                    {
+                      "boundVariables": {
+                        "color": "var(Tokens/color/text/on-brand)"
+                      },
+                      "color": {
+                        "b": 1,
+                        "g": 1,
+                        "r": 1
+                      },
+                      "opacity": 1,
+                      "type": "SOLID",
+                      "visible": true
+                    }
+                  ],
+                  "fontName": {
+                    "family": "Inter",
+                    "style": "Medium",
+                    "variationSettings": {
+                      "slnt": 0,
+                      "wght": 500
+                    }
+                  },
+                  "fontSize": 14,
+                  "height": 17,
+                  "layoutSizingHorizontal": "HUG",
+                  "layoutSizingVertical": "HUG",
+                  "letterSpacing": {
+                    "unit": "PIXELS",
+                    "value": 0
+                  },
+                  "lineHeight": {
+                    "unit": "AUTO"
+                  },
+                  "maxLines": null,
+                  "name": "text",
+                  "opacity": 1,
+                  "paragraphIndent": 0,
+                  "paragraphSpacing": 0,
+                  "rotation": 0,
+                  "textAlignHorizontal": "LEFT",
+                  "textAlignVertical": "TOP",
+                  "textAutoResize": "WIDTH_AND_HEIGHT",
+                  "textCase": "ORIGINAL",
+                  "textDecoration": "NONE",
+                  "textTruncation": "DISABLED",
+                  "textWrapStyle": "AUTO",
+                  "type": "TEXT",
+                  "visible": true,
+                  "width": 76,
+                  "k": "button/Icon=false, Size=md, State=default, Variant=primary/text"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "boundVariables": {
+        "bottomLeftRadius": ["var(Tokens/radius/md)"],
+        "bottomRightRadius": ["var(Tokens/radius/md)"],
+        "fills": ["var(Tokens/color/surface/default)"],
+        "strokes": ["var(Tokens/color/border/default)"],
+        "topLeftRadius": ["var(Tokens/radius/md)"],
+        "topRightRadius": ["var(Tokens/radius/md)"]
+      },
+      "clipsContent": true,
+      "cornerRadius": 8,
+      "counterAxisSizingMode": "FIXED",
+      "fills": [
+        {
+          "boundVariables": {
+            "color": "var(Tokens/color/surface/default)"
+          },
+          "color": {
+            "b": 1,
+            "g": 1,
+            "r": 1
+          },
+          "opacity": 1,
+          "type": "SOLID",
+          "visible": true
+        }
+      ],
+      "height": 278,
+      "layout": {
+        "counterAxisAlignItems": "MIN",
+        "itemSpacing": 0,
+        "layoutWrap": "NO_WRAP",
+        "mode": "VERTICAL",
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "paddingRight": 0,
+        "paddingTop": 0,
+        "primaryAxisAlignItems": "MIN",
+        "strokesIncludedInLayout": true
+      },
+      "layoutSizingHorizontal": "FIXED",
+      "layoutSizingVertical": "HUG",
+      "name": "Sale=false, Title=short",
+      "opacity": 1,
+      "primaryAxisSizingMode": "AUTO",
+      "rotation": 0,
+      "strokeAlign": "INSIDE",
+      "strokeWeight": 1,
+      "strokes": [
+        {
+          "boundVariables": {
+            "color": "var(Tokens/color/border/default)"
+          },
+          "color": {
+            "b": 0.9059,
+            "g": 0.8941,
+            "r": 0.8941
+          },
+          "opacity": 1,
+          "type": "SOLID",
+          "visible": true
+        }
+      ],
+      "type": "COMPONENT",
+      "variantProperties": {
+        "Sale": "false",
+        "Title": "short"
+      },
+      "visible": true,
+      "width": 320,
+      "k": "card.product/Sale=false, Title=short",
+      "children": [
+        {
+          "cornerRadius": 0,
+          "fills": [
+            {
+              "color": {
+                "b": 1,
+                "g": 0.9059,
+                "r": 0.8784
+              },
+              "opacity": 1,
+              "type": "SOLID",
+              "visible": true
+            }
+          ],
+          "height": 160,
+          "layoutAlign": "STRETCH",
+          "layoutSizingHorizontal": "FILL",
+          "layoutSizingVertical": "FIXED",
+          "name": "image",
+          "opacity": 1,
+          "rotation": 0,
+          "type": "RECTANGLE",
+          "visible": true,
+          "width": 318,
+          "k": "card.product/Sale=false, Title=short/image"
+        },
+        {
+          "boundVariables": {
+            "itemSpacing": ["var(Tokens/space/2)"],
+            "paddingBottom": ["var(Tokens/space/3)"],
+            "paddingLeft": ["var(Tokens/space/3)"],
+            "paddingRight": ["var(Tokens/space/3)"],
+            "paddingTop": ["var(Tokens/space/3)"]
+          },
+          "clipsContent": false,
+          "cornerRadius": 0,
+          "counterAxisSizingMode": "FIXED",
+          "fills": [],
+          "height": 116,
+          "layout": {
+            "counterAxisAlignItems": "MIN",
+            "itemSpacing": 8,
+            "layoutWrap": "NO_WRAP",
+            "mode": "VERTICAL",
+            "paddingBottom": 12,
+            "paddingLeft": 12,
+            "paddingRight": 12,
+            "paddingTop": 12,
+            "primaryAxisAlignItems": "MIN"
+          },
+          "layoutAlign": "STRETCH",
+          "layoutSizingHorizontal": "FILL",
+          "layoutSizingVertical": "HUG",
+          "name": "body",
+          "opacity": 1,
+          "primaryAxisSizingMode": "AUTO",
+          "rotation": 0,
+          "type": "FRAME",
+          "visible": true,
+          "width": 318,
+          "k": "card.product/Sale=false, Title=short/body",
+          "children": [
+            {
+              "boundVariables": {
+                "itemSpacing": ["var(Tokens/space/2)"]
+              },
+              "clipsContent": false,
+              "cornerRadius": 0,
+              "counterAxisSizingMode": "AUTO",
+              "fills": [],
+              "height": 24,
+              "layout": {
+                "counterAxisAlignItems": "MIN",
+                "itemSpacing": 8,
+                "layoutWrap": "NO_WRAP",
+                "mode": "HORIZONTAL",
+                "paddingBottom": 0,
+                "paddingLeft": 0,
+                "paddingRight": 0,
+                "paddingTop": 0,
+                "primaryAxisAlignItems": "SPACE_BETWEEN"
+              },
+              "layoutAlign": "STRETCH",
+              "layoutSizingHorizontal": "FILL",
+              "layoutSizingVertical": "HUG",
+              "name": "header",
+              "opacity": 1,
+              "primaryAxisSizingMode": "FIXED",
+              "rotation": 0,
+              "type": "FRAME",
+              "visible": true,
+              "width": 294,
+              "k": "card.product/Sale=false, Title=short/body/header",
+              "children": [
+                {
+                  "boundVariables": {
+                    "fills": ["var(Tokens/color/text/primary)"],
+                    "fontSize": ["var(Tokens/font/size/lg)"]
+                  },
+                  "characters": "Linen shirt",
+                  "fills": [
+                    {
+                      "boundVariables": {
+                        "color": "var(Tokens/color/text/primary)"
+                      },
+                      "color": {
+                        "b": 0.1059,
+                        "g": 0.0941,
+                        "r": 0.0941
+                      },
+                      "opacity": 1,
+                      "type": "SOLID",
+                      "visible": true
+                    }
+                  ],
+                  "fontName": {
+                    "family": "Inter",
+                    "style": "Semi Bold",
+                    "variationSettings": {
+                      "slnt": 0,
+                      "wght": 600
+                    }
+                  },
+                  "fontSize": 16,
+                  "height": 24,
+                  "layoutSizingHorizontal": "HUG",
+                  "layoutSizingVertical": "HUG",
+                  "letterSpacing": {
+                    "unit": "PIXELS",
+                    "value": 0
+                  },
+                  "lineHeight": {
+                    "unit": "PIXELS",
+                    "value": 24
+                  },
+                  "maxLines": 2,
+                  "name": "title",
+                  "opacity": 1,
+                  "paragraphIndent": 0,
+                  "paragraphSpacing": 0,
+                  "rotation": 0,
+                  "textAlignHorizontal": "LEFT",
+                  "textAlignVertical": "TOP",
+                  "textAutoResize": "WIDTH_AND_HEIGHT",
+                  "textCase": "ORIGINAL",
+                  "textDecoration": "NONE",
+                  "textTruncation": "ENDING",
+                  "textWrapStyle": "AUTO",
+                  "type": "TEXT",
+                  "visible": true,
+                  "width": 82,
+                  "k": "card.product/Sale=false, Title=short/body/header/title"
+                }
+              ]
+            },
+            {
+              "boundVariables": {
+                "fills": ["var(Tokens/color/text/secondary)"],
+                "fontSize": ["var(Tokens/font/size/md)"]
+              },
+              "characters": "€49",
+              "fills": [
+                {
+                  "boundVariables": {
+                    "color": "var(Tokens/color/text/secondary)"
+                  },
+                  "color": {
+                    "b": 0.3569,
+                    "g": 0.3216,
+                    "r": 0.3216
+                  },
+                  "opacity": 1,
+                  "type": "SOLID",
+                  "visible": true
+                }
+              ],
+              "fontName": {
+                "family": "Inter",
+                "style": "Medium",
+                "variationSettings": {
+                  "slnt": 0,
+                  "wght": 500
+                }
+              },
+              "fontSize": 14,
+              "height": 17,
+              "layoutSizingHorizontal": "HUG",
+              "layoutSizingVertical": "HUG",
+              "letterSpacing": {
+                "unit": "PIXELS",
+                "value": 0
+              },
+              "lineHeight": {
+                "unit": "AUTO"
+              },
+              "maxLines": null,
+              "name": "price",
+              "opacity": 1,
+              "paragraphIndent": 0,
+              "paragraphSpacing": 0,
+              "rotation": 0,
+              "textAlignHorizontal": "LEFT",
+              "textAlignVertical": "TOP",
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "textTruncation": "DISABLED",
+              "textWrapStyle": "AUTO",
+              "type": "TEXT",
+              "visible": true,
+              "width": 28,
+              "k": "card.product/Sale=false, Title=short/body/price"
+            },
+            {
+              "boundVariables": {
+                "bottomLeftRadius": ["var(Tokens/radius/md)"],
+                "bottomRightRadius": ["var(Tokens/radius/md)"],
+                "fills": ["var(Tokens/color/brand/primary)"],
+                "itemSpacing": ["var(Tokens/space/2)"],
+                "paddingBottom": ["var(Tokens/space/2)"],
+                "paddingLeft": ["var(Tokens/space/4)"],
+                "paddingRight": ["var(Tokens/space/4)"],
+                "paddingTop": ["var(Tokens/space/2)"],
+                "topLeftRadius": ["var(Tokens/radius/md)"],
+                "topRightRadius": ["var(Tokens/radius/md)"]
+              },
+              "clipsContent": false,
+              "componentProperties": {
+                "Icon": {
+                  "type": "VARIANT",
+                  "value": "false"
+                },
+                "Size": {
+                  "type": "VARIANT",
+                  "value": "md"
+                },
+                "State": {
+                  "type": "VARIANT",
+                  "value": "default"
+                },
+                "Variant": {
+                  "type": "VARIANT",
+                  "value": "primary"
+                }
+              },
+              "cornerRadius": 8,
+              "counterAxisSizingMode": "AUTO",
+              "fills": [
+                {
+                  "boundVariables": {
+                    "color": "var(Tokens/color/brand/primary)"
+                  },
+                  "color": {
+                    "b": 0.898,
+                    "g": 0.2745,
+                    "r": 0.3098
+                  },
+                  "opacity": 1,
+                  "type": "SOLID",
+                  "visible": true
+                }
+              ],
+              "height": 35,
+              "layout": {
+                "counterAxisAlignItems": "CENTER",
+                "itemSpacing": 8,
+                "layoutWrap": "NO_WRAP",
+                "mode": "HORIZONTAL",
+                "paddingBottom": 8,
+                "paddingLeft": 16,
+                "paddingRight": 16,
+                "paddingTop": 8,
+                "primaryAxisAlignItems": "MIN",
+                "strokesIncludedInLayout": true
+              },
+              "layoutSizingHorizontal": "HUG",
+              "layoutSizingVertical": "HUG",
+              "name": "button",
+              "opacity": 1,
+              "primaryAxisSizingMode": "AUTO",
+              "rotation": 0,
+              "strokeAlign": "INSIDE",
+              "strokeWeight": 1,
+              "strokes": [
+                {
+                  "color": {
+                    "b": 0,
+                    "g": 0,
+                    "r": 0
+                  },
+                  "opacity": 0,
+                  "type": "SOLID",
+                  "visible": true
+                }
+              ],
+              "type": "INSTANCE",
+              "visible": true,
+              "width": 110,
+              "k": "card.product/Sale=false, Title=short/body/button",
+              "mainComponent": {
+                "componentSetName": "button",
+                "key": "0805f914bc8635d415cfb84a91b75dbc060710d0",
+                "name": "Icon=false, Size=md, State=default, Variant=primary"
+              },
+              "overriddenFields": ["characters", "height", "pluginData", "styledTextSegments", "width"],
+              "children": [
+                {
+                  "boundVariables": {
+                    "fills": ["var(Tokens/color/text/on-brand)"],
+                    "fontSize": ["var(Tokens/font/size/md)"]
+                  },
+                  "characters": "Add to cart",
+                  "fills": [
+                    {
+                      "boundVariables": {
+                        "color": "var(Tokens/color/text/on-brand)"
+                      },
+                      "color": {
+                        "b": 1,
+                        "g": 1,
+                        "r": 1
+                      },
+                      "opacity": 1,
+                      "type": "SOLID",
+                      "visible": true
+                    }
+                  ],
+                  "fontName": {
+                    "family": "Inter",
+                    "style": "Medium",
+                    "variationSettings": {
+                      "slnt": 0,
+                      "wght": 500
+                    }
+                  },
+                  "fontSize": 14,
+                  "height": 17,
+                  "layoutSizingHorizontal": "HUG",
+                  "layoutSizingVertical": "HUG",
+                  "letterSpacing": {
+                    "unit": "PIXELS",
+                    "value": 0
+                  },
+                  "lineHeight": {
+                    "unit": "AUTO"
+                  },
+                  "maxLines": null,
+                  "name": "text",
+                  "opacity": 1,
+                  "paragraphIndent": 0,
+                  "paragraphSpacing": 0,
+                  "rotation": 0,
+                  "textAlignHorizontal": "LEFT",
+                  "textAlignVertical": "TOP",
+                  "textAutoResize": "WIDTH_AND_HEIGHT",
+                  "textCase": "ORIGINAL",
+                  "textDecoration": "NONE",
+                  "textTruncation": "DISABLED",
+                  "textWrapStyle": "AUTO",
+                  "type": "TEXT",
+                  "visible": true,
+                  "width": 76,
+                  "k": "button/Icon=false, Size=md, State=default, Variant=primary/text"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "boundVariables": {
+        "bottomLeftRadius": ["var(Tokens/radius/md)"],
+        "bottomRightRadius": ["var(Tokens/radius/md)"],
+        "fills": ["var(Tokens/color/surface/default)"],
+        "strokes": ["var(Tokens/color/border/default)"],
+        "topLeftRadius": ["var(Tokens/radius/md)"],
+        "topRightRadius": ["var(Tokens/radius/md)"]
+      },
+      "clipsContent": true,
+      "cornerRadius": 8,
+      "counterAxisSizingMode": "FIXED",
+      "fills": [
+        {
+          "boundVariables": {
+            "color": "var(Tokens/color/surface/default)"
+          },
+          "color": {
+            "b": 1,
+            "g": 1,
+            "r": 1
+          },
+          "opacity": 1,
+          "type": "SOLID",
+          "visible": true
+        }
+      ],
+      "height": 278,
+      "layout": {
+        "counterAxisAlignItems": "MIN",
+        "itemSpacing": 0,
+        "layoutWrap": "NO_WRAP",
+        "mode": "VERTICAL",
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "paddingRight": 0,
+        "paddingTop": 0,
+        "primaryAxisAlignItems": "MIN",
+        "strokesIncludedInLayout": true
+      },
+      "layoutSizingHorizontal": "FIXED",
+      "layoutSizingVertical": "HUG",
+      "name": "Sale=true, Title=short",
+      "opacity": 1,
+      "primaryAxisSizingMode": "AUTO",
+      "rotation": 0,
+      "strokeAlign": "INSIDE",
+      "strokeWeight": 1,
+      "strokes": [
+        {
+          "boundVariables": {
+            "color": "var(Tokens/color/border/default)"
+          },
+          "color": {
+            "b": 0.9059,
+            "g": 0.8941,
+            "r": 0.8941
+          },
+          "opacity": 1,
+          "type": "SOLID",
+          "visible": true
+        }
+      ],
+      "type": "COMPONENT",
+      "variantProperties": {
+        "Sale": "true",
+        "Title": "short"
+      },
+      "visible": true,
+      "width": 320,
+      "k": "card.product/Sale=true, Title=short",
+      "children": [
+        {
+          "cornerRadius": 0,
+          "fills": [
+            {
+              "color": {
+                "b": 1,
+                "g": 0.9059,
+                "r": 0.8784
+              },
+              "opacity": 1,
+              "type": "SOLID",
+              "visible": true
+            }
+          ],
+          "height": 160,
+          "layoutAlign": "STRETCH",
+          "layoutSizingHorizontal": "FILL",
+          "layoutSizingVertical": "FIXED",
+          "name": "image",
+          "opacity": 1,
+          "rotation": 0,
+          "type": "RECTANGLE",
+          "visible": true,
+          "width": 318,
+          "k": "card.product/Sale=true, Title=short/image"
+        },
+        {
+          "boundVariables": {
+            "itemSpacing": ["var(Tokens/space/2)"],
+            "paddingBottom": ["var(Tokens/space/3)"],
+            "paddingLeft": ["var(Tokens/space/3)"],
+            "paddingRight": ["var(Tokens/space/3)"],
+            "paddingTop": ["var(Tokens/space/3)"]
+          },
+          "clipsContent": false,
+          "cornerRadius": 0,
+          "counterAxisSizingMode": "FIXED",
+          "fills": [],
+          "height": 116,
+          "layout": {
+            "counterAxisAlignItems": "MIN",
+            "itemSpacing": 8,
+            "layoutWrap": "NO_WRAP",
+            "mode": "VERTICAL",
+            "paddingBottom": 12,
+            "paddingLeft": 12,
+            "paddingRight": 12,
+            "paddingTop": 12,
+            "primaryAxisAlignItems": "MIN"
+          },
+          "layoutAlign": "STRETCH",
+          "layoutSizingHorizontal": "FILL",
+          "layoutSizingVertical": "HUG",
+          "name": "body",
+          "opacity": 1,
+          "primaryAxisSizingMode": "AUTO",
+          "rotation": 0,
+          "type": "FRAME",
+          "visible": true,
+          "width": 318,
+          "k": "card.product/Sale=true, Title=short/body",
+          "children": [
+            {
+              "boundVariables": {
+                "itemSpacing": ["var(Tokens/space/2)"]
+              },
+              "clipsContent": false,
+              "cornerRadius": 0,
+              "counterAxisSizingMode": "AUTO",
+              "fills": [],
+              "height": 24,
+              "layout": {
+                "counterAxisAlignItems": "MIN",
+                "itemSpacing": 8,
+                "layoutWrap": "NO_WRAP",
+                "mode": "HORIZONTAL",
+                "paddingBottom": 0,
+                "paddingLeft": 0,
+                "paddingRight": 0,
+                "paddingTop": 0,
+                "primaryAxisAlignItems": "SPACE_BETWEEN"
+              },
+              "layoutAlign": "STRETCH",
+              "layoutSizingHorizontal": "FILL",
+              "layoutSizingVertical": "HUG",
+              "name": "header",
+              "opacity": 1,
+              "primaryAxisSizingMode": "FIXED",
+              "rotation": 0,
+              "type": "FRAME",
+              "visible": true,
+              "width": 294,
+              "k": "card.product/Sale=true, Title=short/body/header",
+              "children": [
+                {
+                  "boundVariables": {
+                    "fills": ["var(Tokens/color/text/primary)"],
+                    "fontSize": ["var(Tokens/font/size/lg)"]
+                  },
+                  "characters": "Linen shirt",
+                  "fills": [
+                    {
+                      "boundVariables": {
+                        "color": "var(Tokens/color/text/primary)"
+                      },
+                      "color": {
+                        "b": 0.1059,
+                        "g": 0.0941,
+                        "r": 0.0941
+                      },
+                      "opacity": 1,
+                      "type": "SOLID",
+                      "visible": true
+                    }
+                  ],
+                  "fontName": {
+                    "family": "Inter",
+                    "style": "Semi Bold",
+                    "variationSettings": {
+                      "slnt": 0,
+                      "wght": 600
+                    }
+                  },
+                  "fontSize": 16,
+                  "height": 24,
+                  "layoutSizingHorizontal": "HUG",
+                  "layoutSizingVertical": "HUG",
+                  "letterSpacing": {
+                    "unit": "PIXELS",
+                    "value": 0
+                  },
+                  "lineHeight": {
+                    "unit": "PIXELS",
+                    "value": 24
+                  },
+                  "maxLines": 2,
+                  "name": "title",
+                  "opacity": 1,
+                  "paragraphIndent": 0,
+                  "paragraphSpacing": 0,
+                  "rotation": 0,
+                  "textAlignHorizontal": "LEFT",
+                  "textAlignVertical": "TOP",
+                  "textAutoResize": "WIDTH_AND_HEIGHT",
+                  "textCase": "ORIGINAL",
+                  "textDecoration": "NONE",
+                  "textTruncation": "ENDING",
+                  "textWrapStyle": "AUTO",
+                  "type": "TEXT",
+                  "visible": true,
+                  "width": 82,
+                  "k": "card.product/Sale=true, Title=short/body/header/title"
+                },
+                {
+                  "boundVariables": {
+                    "bottomLeftRadius": ["var(Tokens/radius/full)"],
+                    "bottomRightRadius": ["var(Tokens/radius/full)"],
+                    "fills": ["var(Tokens/color/status/sale-surface)"],
+                    "paddingLeft": ["var(Tokens/space/2)"],
+                    "paddingRight": ["var(Tokens/space/2)"],
+                    "topLeftRadius": ["var(Tokens/radius/full)"],
+                    "topRightRadius": ["var(Tokens/radius/full)"]
+                  },
+                  "clipsContent": false,
+                  "componentProperties": {
+                    "Tone": {
+                      "type": "VARIANT",
+                      "value": "sale"
+                    }
+                  },
+                  "cornerRadius": 9999,
+                  "counterAxisSizingMode": "AUTO",
+                  "fills": [
+                    {
+                      "boundVariables": {
+                        "color": "var(Tokens/color/status/sale-surface)"
+                      },
+                      "color": {
+                        "b": 0.8863,
+                        "g": 0.8863,
+                        "r": 0.9961
+                      },
+                      "opacity": 1,
+                      "type": "SOLID",
+                      "visible": true
+                    }
+                  ],
+                  "height": 20,
+                  "layout": {
+                    "counterAxisAlignItems": "CENTER",
+                    "itemSpacing": 0,
+                    "layoutWrap": "NO_WRAP",
+                    "mode": "HORIZONTAL",
+                    "paddingBottom": 2,
+                    "paddingLeft": 8,
+                    "paddingRight": 8,
+                    "paddingTop": 2,
+                    "primaryAxisAlignItems": "MIN"
+                  },
+                  "layoutSizingHorizontal": "HUG",
+                  "layoutSizingVertical": "HUG",
+                  "name": "badge",
+                  "opacity": 1,
+                  "primaryAxisSizingMode": "AUTO",
+                  "rotation": 0,
+                  "type": "INSTANCE",
+                  "visible": true,
+                  "width": 41,
+                  "k": "card.product/Sale=true, Title=short/body/header/badge",
+                  "mainComponent": {
+                    "componentSetName": "badge",
+                    "key": "621143b37d980aab696b36cb07022cc73dbd9834",
+                    "name": "Tone=sale"
+                  },
+                  "overriddenFields": ["characters", "height", "pluginData", "styledTextSegments", "width"],
+                  "children": [
+                    {
+                      "boundVariables": {
+                        "fills": ["var(Tokens/color/status/sale)"],
+                        "fontSize": ["var(Tokens/font/size/sm)"]
+                      },
+                      "characters": "Sale",
+                      "fills": [
+                        {
+                          "boundVariables": {
+                            "color": "var(Tokens/color/status/sale)"
+                          },
+                          "color": {
+                            "b": 0.149,
+                            "g": 0.149,
+                            "r": 0.8627
+                          },
+                          "opacity": 1,
+                          "type": "SOLID",
+                          "visible": true
+                        }
+                      ],
+                      "fontName": {
+                        "family": "Inter",
+                        "style": "Semi Bold",
+                        "variationSettings": {
+                          "slnt": 0,
+                          "wght": 600
+                        }
+                      },
+                      "fontSize": 12,
+                      "height": 16,
+                      "layoutSizingHorizontal": "HUG",
+                      "layoutSizingVertical": "HUG",
+                      "letterSpacing": {
+                        "unit": "PIXELS",
+                        "value": 0
+                      },
+                      "lineHeight": {
+                        "unit": "PIXELS",
+                        "value": 16
+                      },
+                      "maxLines": null,
+                      "name": "label",
+                      "opacity": 1,
+                      "paragraphIndent": 0,
+                      "paragraphSpacing": 0,
+                      "rotation": 0,
+                      "textAlignHorizontal": "LEFT",
+                      "textAlignVertical": "TOP",
+                      "textAutoResize": "WIDTH_AND_HEIGHT",
+                      "textCase": "ORIGINAL",
+                      "textDecoration": "NONE",
+                      "textTruncation": "DISABLED",
+                      "textWrapStyle": "AUTO",
+                      "type": "TEXT",
+                      "visible": true,
+                      "width": 25,
+                      "k": "badge/Tone=sale/label"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "boundVariables": {
+                "fills": ["var(Tokens/color/text/secondary)"],
+                "fontSize": ["var(Tokens/font/size/md)"]
+              },
+              "characters": "€49",
+              "fills": [
+                {
+                  "boundVariables": {
+                    "color": "var(Tokens/color/text/secondary)"
+                  },
+                  "color": {
+                    "b": 0.3569,
+                    "g": 0.3216,
+                    "r": 0.3216
+                  },
+                  "opacity": 1,
+                  "type": "SOLID",
+                  "visible": true
+                }
+              ],
+              "fontName": {
+                "family": "Inter",
+                "style": "Medium",
+                "variationSettings": {
+                  "slnt": 0,
+                  "wght": 500
+                }
+              },
+              "fontSize": 14,
+              "height": 17,
+              "layoutSizingHorizontal": "HUG",
+              "layoutSizingVertical": "HUG",
+              "letterSpacing": {
+                "unit": "PIXELS",
+                "value": 0
+              },
+              "lineHeight": {
+                "unit": "AUTO"
+              },
+              "maxLines": null,
+              "name": "price",
+              "opacity": 1,
+              "paragraphIndent": 0,
+              "paragraphSpacing": 0,
+              "rotation": 0,
+              "textAlignHorizontal": "LEFT",
+              "textAlignVertical": "TOP",
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textCase": "ORIGINAL",
+              "textDecoration": "NONE",
+              "textTruncation": "DISABLED",
+              "textWrapStyle": "AUTO",
+              "type": "TEXT",
+              "visible": true,
+              "width": 28,
+              "k": "card.product/Sale=true, Title=short/body/price"
+            },
+            {
+              "boundVariables": {
+                "bottomLeftRadius": ["var(Tokens/radius/md)"],
+                "bottomRightRadius": ["var(Tokens/radius/md)"],
+                "fills": ["var(Tokens/color/brand/primary)"],
+                "itemSpacing": ["var(Tokens/space/2)"],
+                "paddingBottom": ["var(Tokens/space/2)"],
+                "paddingLeft": ["var(Tokens/space/4)"],
+                "paddingRight": ["var(Tokens/space/4)"],
+                "paddingTop": ["var(Tokens/space/2)"],
+                "topLeftRadius": ["var(Tokens/radius/md)"],
+                "topRightRadius": ["var(Tokens/radius/md)"]
+              },
+              "clipsContent": false,
+              "componentProperties": {
+                "Icon": {
+                  "type": "VARIANT",
+                  "value": "false"
+                },
+                "Size": {
+                  "type": "VARIANT",
+                  "value": "md"
+                },
+                "State": {
+                  "type": "VARIANT",
+                  "value": "default"
+                },
+                "Variant": {
+                  "type": "VARIANT",
+                  "value": "primary"
+                }
+              },
+              "cornerRadius": 8,
+              "counterAxisSizingMode": "AUTO",
+              "fills": [
+                {
+                  "boundVariables": {
+                    "color": "var(Tokens/color/brand/primary)"
+                  },
+                  "color": {
+                    "b": 0.898,
+                    "g": 0.2745,
+                    "r": 0.3098
+                  },
+                  "opacity": 1,
+                  "type": "SOLID",
+                  "visible": true
+                }
+              ],
+              "height": 35,
+              "layout": {
+                "counterAxisAlignItems": "CENTER",
+                "itemSpacing": 8,
+                "layoutWrap": "NO_WRAP",
+                "mode": "HORIZONTAL",
+                "paddingBottom": 8,
+                "paddingLeft": 16,
+                "paddingRight": 16,
+                "paddingTop": 8,
+                "primaryAxisAlignItems": "MIN",
+                "strokesIncludedInLayout": true
+              },
+              "layoutSizingHorizontal": "HUG",
+              "layoutSizingVertical": "HUG",
+              "name": "button",
+              "opacity": 1,
+              "primaryAxisSizingMode": "AUTO",
+              "rotation": 0,
+              "strokeAlign": "INSIDE",
+              "strokeWeight": 1,
+              "strokes": [
+                {
+                  "color": {
+                    "b": 0,
+                    "g": 0,
+                    "r": 0
+                  },
+                  "opacity": 0,
+                  "type": "SOLID",
+                  "visible": true
+                }
+              ],
+              "type": "INSTANCE",
+              "visible": true,
+              "width": 110,
+              "k": "card.product/Sale=true, Title=short/body/button",
+              "mainComponent": {
+                "componentSetName": "button",
+                "key": "0805f914bc8635d415cfb84a91b75dbc060710d0",
+                "name": "Icon=false, Size=md, State=default, Variant=primary"
+              },
+              "overriddenFields": ["characters", "height", "pluginData", "styledTextSegments", "width"],
+              "children": [
+                {
+                  "boundVariables": {
+                    "fills": ["var(Tokens/color/text/on-brand)"],
+                    "fontSize": ["var(Tokens/font/size/md)"]
+                  },
+                  "characters": "Add to cart",
+                  "fills": [
+                    {
+                      "boundVariables": {
+                        "color": "var(Tokens/color/text/on-brand)"
+                      },
+                      "color": {
+                        "b": 1,
+                        "g": 1,
+                        "r": 1
+                      },
+                      "opacity": 1,
+                      "type": "SOLID",
+                      "visible": true
+                    }
+                  ],
+                  "fontName": {
+                    "family": "Inter",
+                    "style": "Medium",
+                    "variationSettings": {
+                      "slnt": 0,
+                      "wght": 500
+                    }
+                  },
+                  "fontSize": 14,
+                  "height": 17,
+                  "layoutSizingHorizontal": "HUG",
+                  "layoutSizingVertical": "HUG",
+                  "letterSpacing": {
+                    "unit": "PIXELS",
+                    "value": 0
+                  },
+                  "lineHeight": {
+                    "unit": "AUTO"
+                  },
+                  "maxLines": null,
+                  "name": "text",
+                  "opacity": 1,
+                  "paragraphIndent": 0,
+                  "paragraphSpacing": 0,
+                  "rotation": 0,
+                  "textAlignHorizontal": "LEFT",
+                  "textAlignVertical": "TOP",
+                  "textAutoResize": "WIDTH_AND_HEIGHT",
+                  "textCase": "ORIGINAL",
+                  "textDecoration": "NONE",
+                  "textTruncation": "DISABLED",
+                  "textWrapStyle": "AUTO",
+                  "type": "TEXT",
+                  "visible": true,
+                  "width": 76,
+                  "k": "button/Icon=false, Size=md, State=default, Variant=primary/text"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

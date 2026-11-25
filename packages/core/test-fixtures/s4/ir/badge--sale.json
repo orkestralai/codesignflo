@@ -1,0 +1,75 @@
+{
+  "story": "badge--sale",
+  "root": {
+    "name": "badge",
+    "width": 48.73,
+    "height": 20,
+    "sizing": {
+      "w": "hug",
+      "h": "hug"
+    },
+    "type": "FRAME",
+    "layout": {
+      "direction": "HORIZONTAL",
+      "gap": {
+        "value": 0
+      },
+      "padding": [
+        {
+          "value": 2
+        },
+        {
+          "value": 8,
+          "token": "space-2"
+        },
+        {
+          "value": 2
+        },
+        {
+          "value": 8,
+          "token": "space-2"
+        }
+      ],
+      "align": "CENTER",
+      "justify": "MIN"
+    },
+    "fill": {
+      "value": "#fee2e2",
+      "token": "color-status-sale-surface"
+    },
+    "radius": {
+      "value": 9999,
+      "token": "radius-full"
+    },
+    "children": [
+      {
+        "name": "label",
+        "type": "TEXT",
+        "width": 0,
+        "height": 0,
+        "sizing": {
+          "w": "hug",
+          "h": "hug"
+        },
+        "text": {
+          "characters": "-20%",
+          "fontFamily": "Inter",
+          "fontWeight": {
+            "value": 600,
+            "token": "font-weight-semibold"
+          },
+          "fontSize": {
+            "value": 12,
+            "token": "font-size-sm"
+          },
+          "lineHeight": 16,
+          "letterSpacing": 0,
+          "color": {
+            "value": "#dc2626",
+            "token": "color-status-sale"
+          }
+        }
+      }
+    ]
+  }
+}

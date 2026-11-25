@@ -1,0 +1,71 @@
+{
+  "tokens": "tokens.json",
+  "components": {
+    "badge": {
+      "module": "Badge",
+      "stories": {
+        "badge--neutral": {
+          "Tone": "neutral"
+        },
+        "badge--sale": {
+          "Tone": "sale"
+        }
+      }
+    },
+    "button": {
+      "module": "Button",
+      "stories": {
+        "button--primary": {
+          "Variant": "primary",
+          "Size": "md",
+          "State": "default",
+          "Icon": "false"
+        },
+        "button--secondary": {
+          "Variant": "secondary",
+          "Size": "md",
+          "State": "default",
+          "Icon": "false"
+        },
+        "button--small": {
+          "Variant": "primary",
+          "Size": "sm",
+          "State": "default",
+          "Icon": "false"
+        },
+        "button--disabled": {
+          "Variant": "primary",
+          "Size": "md",
+          "State": "disabled",
+          "Icon": "false"
+        },
+        "button--with-icon": {
+          "Variant": "primary",
+          "Size": "md",
+          "State": "default",
+          "Icon": "true"
+        }
+      }
+    },
+    "card.product": {
+      "module": "ProductCard",
+      "stories": {
+        "productcard--default": {
+          "Sale": "false",
+          "Title": "short"
+        },
+        "productcard--on-sale": {
+          "Sale": "true",
+          "Title": "short"
+        },
+        "productcard--long-title": {
+          "Sale": "false",
+          "Title": "long"
+        }
+      }
+    }
+  },
+  "screens": {
+    "home": "pages-home--default"
+  }
+}

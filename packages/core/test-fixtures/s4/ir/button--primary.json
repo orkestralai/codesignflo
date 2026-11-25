@@ -1,0 +1,84 @@
+{
+  "story": "button--primary",
+  "root": {
+    "name": "button",
+    "width": 77.84,
+    "height": 35,
+    "sizing": {
+      "w": "hug",
+      "h": "hug"
+    },
+    "type": "FRAME",
+    "layout": {
+      "direction": "HORIZONTAL",
+      "gap": {
+        "value": 8,
+        "token": "space-2"
+      },
+      "padding": [
+        {
+          "value": 8,
+          "token": "space-2"
+        },
+        {
+          "value": 16,
+          "token": "space-4"
+        },
+        {
+          "value": 8,
+          "token": "space-2"
+        },
+        {
+          "value": 16,
+          "token": "space-4"
+        }
+      ],
+      "align": "CENTER",
+      "justify": "MIN"
+    },
+    "fill": {
+      "value": "#4f46e5",
+      "token": "color-brand-primary"
+    },
+    "stroke": {
+      "color": {
+        "value": "#00000000"
+      },
+      "width": 1
+    },
+    "radius": {
+      "value": 8,
+      "token": "radius-md"
+    },
+    "children": [
+      {
+        "name": "text",
+        "width": 43.84,
+        "height": 17,
+        "sizing": {
+          "w": "hug",
+          "h": "hug"
+        },
+        "type": "TEXT",
+        "text": {
+          "characters": "Button",
+          "fontFamily": "Inter",
+          "fontWeight": {
+            "value": 500,
+            "token": "font-weight-medium"
+          },
+          "fontSize": {
+            "value": 14,
+            "token": "font-size-md"
+          },
+          "lineHeight": 0,
+          "letterSpacing": 0,
+          "color": {
+            "value": "#ffffff",
+            "token": "color-text-on-brand"
+          }
+        }
+      }
+    ]
+  }
+}

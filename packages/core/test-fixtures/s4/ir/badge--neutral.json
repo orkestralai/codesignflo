@@ -1,0 +1,75 @@
+{
+  "story": "badge--neutral",
+  "root": {
+    "name": "badge",
+    "width": 42.11,
+    "height": 20,
+    "sizing": {
+      "w": "hug",
+      "h": "hug"
+    },
+    "type": "FRAME",
+    "layout": {
+      "direction": "HORIZONTAL",
+      "gap": {
+        "value": 0
+      },
+      "padding": [
+        {
+          "value": 2
+        },
+        {
+          "value": 8,
+          "token": "space-2"
+        },
+        {
+          "value": 2
+        },
+        {
+          "value": 8,
+          "token": "space-2"
+        }
+      ],
+      "align": "CENTER",
+      "justify": "MIN"
+    },
+    "fill": {
+      "value": "#f4f4f5",
+      "token": "color-surface-muted"
+    },
+    "radius": {
+      "value": 9999,
+      "token": "radius-full"
+    },
+    "children": [
+      {
+        "name": "label",
+        "type": "TEXT",
+        "width": 0,
+        "height": 0,
+        "sizing": {
+          "w": "hug",
+          "h": "hug"
+        },
+        "text": {
+          "characters": "New",
+          "fontFamily": "Inter",
+          "fontWeight": {
+            "value": 600,
+            "token": "font-weight-semibold"
+          },
+          "fontSize": {
+            "value": 12,
+            "token": "font-size-sm"
+          },
+          "lineHeight": 16,
+          "letterSpacing": 0,
+          "color": {
+            "value": "#52525b",
+            "token": "color-text-secondary"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,363 @@
+[
+  {
+    "spec": {
+      "k": "screen:home",
+      "type": "FRAME",
+      "name": "home",
+      "props": {
+        "width": 1024,
+        "layoutMode": "VERTICAL",
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "itemSpacing": 0,
+        "primaryAxisAlignItems": "MIN",
+        "counterAxisAlignItems": "MIN",
+        "primaryAxisSizingMode": "AUTO",
+        "counterAxisSizingMode": "FIXED",
+        "fills": ["#ffffff"],
+        "strokes": [],
+        "strokesIncludedInLayout": false,
+        "cornerRadius": 0,
+        "opacity": 1,
+        "clipsContent": false,
+        "effects": []
+      },
+      "paintBind": {
+        "fills": "color/surface/default"
+      },
+      "children": [
+        {
+          "k": "screen:home/header",
+          "type": "FRAME",
+          "name": "header",
+          "props": {
+            "layoutSizingHorizontal": "FILL",
+            "layoutSizingVertical": "HUG",
+            "layoutMode": "HORIZONTAL",
+            "paddingTop": 12,
+            "paddingRight": 24,
+            "paddingBottom": 12,
+            "paddingLeft": 24,
+            "itemSpacing": 0,
+            "primaryAxisAlignItems": "SPACE_BETWEEN",
+            "counterAxisAlignItems": "CENTER",
+            "primaryAxisSizingMode": "FIXED",
+            "counterAxisSizingMode": "AUTO",
+            "fills": ["#f4f4f5"],
+            "strokes": [],
+            "strokesIncludedInLayout": false,
+            "cornerRadius": 0,
+            "opacity": 1,
+            "clipsContent": false,
+            "effects": []
+          },
+          "bind": {
+            "paddingTop": "space/3",
+            "paddingRight": "space/6",
+            "paddingBottom": "space/3",
+            "paddingLeft": "space/6"
+          },
+          "paintBind": {
+            "fills": "color/surface/muted"
+          },
+          "children": [
+            {
+              "k": "screen:home/header/logo",
+              "type": "TEXT",
+              "name": "logo",
+              "props": {
+                "layoutSizingHorizontal": "HUG",
+                "layoutSizingVertical": "HUG",
+                "characters": "Shop",
+                "fontName": {
+                  "family": "Inter",
+                  "style": "Semi Bold"
+                },
+                "fontSize": 16,
+                "lineHeight": {
+                  "unit": "AUTO"
+                },
+                "letterSpacing": {
+                  "unit": "PIXELS",
+                  "value": 0
+                },
+                "fills": ["#4f46e5"],
+                "textAutoResize": "WIDTH_AND_HEIGHT"
+              },
+              "bind": {
+                "fontSize": "font/size/lg"
+              },
+              "paintBind": {
+                "fills": "color/brand/primary"
+              },
+              "measured": {
+                "w": 40,
+                "h": 20
+              }
+            },
+            {
+              "k": "screen:home/header/button",
+              "type": "INSTANCE",
+              "name": "button",
+              "props": {
+                "layoutSizingHorizontal": "FIXED",
+                "layoutSizingVertical": "FIXED",
+                "width": 85.33,
+                "height": 35
+              },
+              "instance": {
+                "mainK": "button/Icon=false, Size=md, State=default, Variant=secondary",
+                "overrides": [
+                  {
+                    "path": ["text"],
+                    "at": [0],
+                    "characters": "Cart (2)"
+                  }
+                ]
+              },
+              "measured": {
+                "w": 85,
+                "h": 35
+              }
+            }
+          ],
+          "measured": {
+            "w": 1024,
+            "h": 59
+          }
+        },
+        {
+          "k": "screen:home/main",
+          "type": "FRAME",
+          "name": "main",
+          "props": {
+            "layoutSizingHorizontal": "FILL",
+            "layoutSizingVertical": "HUG",
+            "layoutMode": "VERTICAL",
+            "paddingTop": 24,
+            "paddingRight": 24,
+            "paddingBottom": 24,
+            "paddingLeft": 24,
+            "itemSpacing": 16,
+            "primaryAxisAlignItems": "MIN",
+            "counterAxisAlignItems": "MIN",
+            "primaryAxisSizingMode": "AUTO",
+            "counterAxisSizingMode": "FIXED",
+            "fills": [],
+            "strokes": [],
+            "strokesIncludedInLayout": false,
+            "cornerRadius": 0,
+            "opacity": 1,
+            "clipsContent": false,
+            "effects": []
+          },
+          "bind": {
+            "itemSpacing": "space/4",
+            "paddingTop": "space/6",
+            "paddingRight": "space/6",
+            "paddingBottom": "space/6",
+            "paddingLeft": "space/6"
+          },
+          "children": [
+            {
+              "k": "screen:home/main/heading",
+              "type": "TEXT",
+              "name": "heading",
+              "props": {
+                "layoutSizingHorizontal": "HUG",
+                "layoutSizingVertical": "HUG",
+                "characters": "New arrivals",
+                "fontName": {
+                  "family": "Inter",
+                  "style": "Semi Bold"
+                },
+                "fontSize": 16,
+                "lineHeight": {
+                  "unit": "PIXELS",
+                  "value": 24
+                },
+                "letterSpacing": {
+                  "unit": "PIXELS",
+                  "value": 0
+                },
+                "fills": ["#18181b"],
+                "textAutoResize": "WIDTH_AND_HEIGHT"
+              },
+              "bind": {
+                "fontSize": "font/size/lg"
+              },
+              "paintBind": {
+                "fills": "color/text/primary"
+              },
+              "measured": {
+                "w": 976,
+                "h": 24
+              }
+            },
+            {
+              "k": "screen:home/main/grid",
+              "type": "FRAME",
+              "name": "grid",
+              "props": {
+                "layoutSizingHorizontal": "FILL",
+                "layoutSizingVertical": "HUG",
+                "layoutMode": "GRID",
+                "paddingTop": 0,
+                "paddingRight": 0,
+                "paddingBottom": 0,
+                "paddingLeft": 0,
+                "gridColumnCount": 3,
+                "gridRowCount": 1,
+                "gridColumnGap": 16,
+                "gridRowGap": 16,
+                "fills": [],
+                "strokes": [],
+                "strokesIncludedInLayout": false,
+                "cornerRadius": 0,
+                "opacity": 1,
+                "clipsContent": false,
+                "effects": []
+              },
+              "bind": {
+                "gridColumnGap": "space/4",
+                "gridRowGap": "space/4"
+              },
+              "children": [
+                {
+                  "k": "screen:home/main/grid/card",
+                  "type": "INSTANCE",
+                  "name": "card",
+                  "props": {
+                    "layoutSizingHorizontal": "FILL",
+                    "layoutSizingVertical": "FIXED",
+                    "height": 302
+                  },
+                  "instance": {
+                    "mainK": "card.product/Sale=true, Title=short",
+                    "overrides": [
+                      {
+                        "path": ["body", "header", "title"],
+                        "at": [1, 0, 0],
+                        "characters": "Linen shirt"
+                      },
+                      {
+                        "path": ["body", "header", "badge", "label"],
+                        "at": [1, 0, 1, 0],
+                        "characters": "Sale"
+                      },
+                      {
+                        "path": ["body", "price"],
+                        "at": [1, 1],
+                        "characters": "€49"
+                      },
+                      {
+                        "path": ["body", "button", "text"],
+                        "at": [1, 2, 0],
+                        "characters": "Add to cart"
+                      }
+                    ]
+                  },
+                  "measured": {
+                    "w": 315,
+                    "h": 302
+                  }
+                },
+                {
+                  "k": "screen:home/main/grid/card#1",
+                  "type": "INSTANCE",
+                  "name": "card",
+                  "props": {
+                    "layoutSizingHorizontal": "FILL",
+                    "layoutSizingVertical": "FIXED",
+                    "height": 302
+                  },
+                  "instance": {
+                    "mainK": "card.product/Sale=false, Title=long",
+                    "overrides": [
+                      {
+                        "path": ["body", "header", "title"],
+                        "at": [1, 0, 0],
+                        "characters": "Wool scarf with a long name that wraps onto two lines"
+                      },
+                      {
+                        "path": ["body", "price"],
+                        "at": [1, 1],
+                        "characters": "€29"
+                      },
+                      {
+                        "path": ["body", "button", "text"],
+                        "at": [1, 2, 0],
+                        "characters": "Add to cart"
+                      }
+                    ]
+                  },
+                  "measured": {
+                    "w": 315,
+                    "h": 302
+                  }
+                },
+                {
+                  "k": "screen:home/main/grid/card#2",
+                  "type": "INSTANCE",
+                  "name": "card",
+                  "props": {
+                    "layoutSizingHorizontal": "FILL",
+                    "layoutSizingVertical": "FIXED",
+                    "height": 302
+                  },
+                  "instance": {
+                    "mainK": "card.product/Sale=false, Title=short",
+                    "overrides": [
+                      {
+                        "path": ["body", "header", "title"],
+                        "at": [1, 0, 0],
+                        "characters": "Canvas tote"
+                      },
+                      {
+                        "path": ["body", "price"],
+                        "at": [1, 1],
+                        "characters": "€19"
+                      },
+                      {
+                        "path": ["body", "button", "text"],
+                        "at": [1, 2, 0],
+                        "characters": "Add to cart"
+                      }
+                    ]
+                  },
+                  "measured": {
+                    "w": 315,
+                    "h": 302
+                  }
+                }
+              ],
+              "measured": {
+                "w": 976,
+                "h": 302
+              }
+            }
+          ],
+          "measured": {
+            "w": 1024,
+            "h": 390
+          }
+        }
+      ],
+      "measured": {
+        "w": 1024,
+        "h": 449
+      }
+    },
+    "coverage": {
+      "nodes": 34,
+      "inInstances": 28,
+      "instances": {
+        "Button": 1,
+        "ProductCard": 3
+      },
+      "unmapped": ["header", "main", "main/grid"]
+    }
+  }
+]

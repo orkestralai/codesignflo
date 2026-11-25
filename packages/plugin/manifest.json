@@ -1,0 +1,15 @@
+{
+  "name": "CoDesignFlo (dev)",
+  "id": "codesignflo-dev",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "permissions": ["currentuser", "teamlibrary"],
+  "networkAccess": {
+    "allowedDomains": ["ws://localhost:4517"],
+    "reasoning": "Connects to the CoDesignFlo CLI on the developer's own machine (localhost) and, when signed in, to the CoDesignFlo service to share the designer's proposals with their team.",
+    "devAllowedDomains": ["ws://localhost:4517", "http://localhost:55321", "ws://localhost:55321", "http://localhost:3317"]
+  }
+}

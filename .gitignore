@@ -1,0 +1,24 @@
+node_modules/
+dist/
+storybook-static/
+storybook-static-1/
+.DS_Store
+*.log
+resources/
+# throwaway checkout with its own git repo (spike S6)
+spikes/s6/work/
+.cache/
+pack/
+*.zip
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+release/
+
+# test apps from the joint runs (their own repos)
+tests/
+
+# Vercel build output
+.vercel/
+
+# the service role key for scripts/admin.mjs
+.env.admin

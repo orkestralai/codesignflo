@@ -1,0 +1,10 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-surface-muted);
+}
+.logo { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-brand-primary); text-decoration: none; }
+.nav { display: flex; align-items: center; gap: var(--space-4); }
+.link { font-size: var(--font-size-md); color: var(--color-text-primary); text-decoration: none; }

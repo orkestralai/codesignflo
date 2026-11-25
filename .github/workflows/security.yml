@@ -1,0 +1,19 @@
+name: security
+# Weekly: known vulnerabilities in the production dependencies of the CLI, the plugin and the service.
+# A failure emails the repository's watchers; handle it as in docs/SECURITY.md.
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --audit-level high

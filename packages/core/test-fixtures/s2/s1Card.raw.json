@@ -1,0 +1,158 @@
+{
+  "tree": {
+    "id": "1:1120",
+    "name": "S1 Card",
+    "type": "FRAME",
+    "visible": true,
+    "locked": false,
+    "x": 40,
+    "y": 300,
+    "width": 240,
+    "height": 200,
+    "parentId": "1:1106",
+    "rotation": 0,
+    "opacity": 1,
+    "cornerRadius": 0,
+    "fills": [
+      {
+        "type": "SOLID",
+        "visible": true,
+        "opacity": 1,
+        "color": {
+          "r": 1,
+          "g": 1,
+          "b": 1
+        }
+      }
+    ],
+    "layout": {
+      "mode": "VERTICAL",
+      "paddingTop": 12,
+      "paddingRight": 12,
+      "paddingBottom": 12,
+      "paddingLeft": 12,
+      "itemSpacing": 8,
+      "primaryAxisAlignItems": "MIN",
+      "counterAxisAlignItems": "MIN",
+      "layoutWrap": "NO_WRAP",
+      "strokesIncludedInLayout": true
+    },
+    "constraints": {
+      "horizontal": "MIN",
+      "vertical": "MIN"
+    },
+    "clipsContent": true,
+    "ds": {
+      "k": "card",
+      "origId": "1:1120"
+    },
+    "children": [
+      {
+        "id": "1:1121",
+        "name": "Image",
+        "type": "FRAME",
+        "visible": true,
+        "locked": false,
+        "x": 12,
+        "y": 12,
+        "width": 216,
+        "height": 120,
+        "parentId": "1:1120",
+        "rotation": 0,
+        "opacity": 1,
+        "cornerRadius": 0,
+        "fills": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+              "r": 0.8999999761581421,
+              "g": 0.8999999761581421,
+              "b": 0.949999988079071
+            }
+          }
+        ],
+        "layoutSizingHorizontal": "FIXED",
+        "layoutSizingVertical": "FIXED",
+        "clipsContent": true,
+        "ds": {
+          "k": "card/Image",
+          "origId": "1:1121"
+        },
+        "children": []
+      },
+      {
+        "id": "1:1122",
+        "name": "Title",
+        "type": "FRAME",
+        "visible": true,
+        "locked": false,
+        "x": 12,
+        "y": 140,
+        "width": 216,
+        "height": 20,
+        "parentId": "1:1120",
+        "rotation": 0,
+        "opacity": 1,
+        "cornerRadius": 0,
+        "fills": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+              "r": 0.8999999761581421,
+              "g": 0.8999999761581421,
+              "b": 0.949999988079071
+            }
+          }
+        ],
+        "layoutSizingHorizontal": "FIXED",
+        "layoutSizingVertical": "FIXED",
+        "clipsContent": true,
+        "ds": {
+          "k": "card/Title",
+          "origId": "1:1122"
+        },
+        "children": []
+      },
+      {
+        "id": "1:1123",
+        "name": "Price",
+        "type": "FRAME",
+        "visible": true,
+        "locked": false,
+        "x": 12,
+        "y": 168,
+        "width": 216,
+        "height": 20,
+        "parentId": "1:1120",
+        "rotation": 0,
+        "opacity": 1,
+        "cornerRadius": 0,
+        "fills": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+              "r": 0.8999999761581421,
+              "g": 0.8999999761581421,
+              "b": 0.949999988079071
+            }
+          }
+        ],
+        "layoutSizingHorizontal": "FIXED",
+        "layoutSizingVertical": "FIXED",
+        "clipsContent": true,
+        "ds": {
+          "k": "card/Price",
+          "origId": "1:1123"
+        },
+        "children": []
+      }
+    ]
+  },
+  "variables": {}
+}

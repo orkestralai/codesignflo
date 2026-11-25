@@ -1,0 +1,74 @@
+# The box's single public entry: Supabase's API and the CoDesignFlo server on one origin, so the Figma plugin,
+# the CLI and browsers need one address (one domain in the plugin's allowed list). Supabase's clients use
+# <origin>/auth/v1, /rest/v1, /storage/v1 and /realtime/v1, as Supabase's own gateway (Kong) maps them.
+#
+# SITE_ADDRESS: ":8080" (plain HTTP, e.g. behind your own TLS proxy) or a domain such as "design.acme.com"
+# (Caddy gets and renews its HTTPS certificate itself; ports 80 and 443 must reach the box).
+{
+	admin off
+	# No proxy in front is trusted by default: X-Forwarded-For/-Proto from clients are replaced, not believed. Behind
+	# your own TLS proxy or load balancer, trust only its address, e.g.:
+	#   servers {
+	#     trusted_proxies static 10.0.0.5/32
+	#   }
+}
+
+# CORS as Supabase's gateway (Kong) answers it: the Figma plugin calls from a "null" origin. PostgREST and the
+# CoDesignFlo server answer it themselves.
+(cors) {
+	header >Access-Control-Allow-Origin "*"
+	header >Access-Control-Expose-Headers "*"
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+		header Access-Control-Allow-Headers "{http.request.header.Access-Control-Request-Headers}"
+		header Access-Control-Max-Age "3600"
+		respond 204
+	}
+}
+
+{$SITE_ADDRESS::8080} {
+	# Auth (GoTrue): sign-in, sign-up, tokens.
+	handle_path /auth/v1/* {
+		import cors
+		reverse_proxy auth:9999
+	}
+	# The database's API (PostgREST).
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000
+	}
+	# Files (Storage): no body size limit here, Storage sets its own (FILE_SIZE_LIMIT).
+	handle_path /storage/v1/* {
+		import cors
+		reverse_proxy storage:5000 {
+			header_up X-Forwarded-Prefix /storage/v1
+		}
+	}
+	# Realtime: its tenant comes from the host name it is asked as ("realtime-dev", seeded for self-hosting). Of its
+	# HTTP API only broadcasting is public (what supabase-js sends without a socket); tenant management is not.
+	handle /realtime/v1/api/broadcast* {
+		import cors
+		uri strip_prefix /realtime/v1
+		reverse_proxy realtime:4000 {
+			header_up Host realtime-dev.supabase-realtime
+		}
+	}
+	handle /realtime/v1/api/* {
+		respond 404
+	}
+	handle_path /realtime/v1/* {
+		rewrite * /socket{uri}
+		reverse_proxy realtime:4000 {
+			header_up Host realtime-dev.supabase-realtime
+		}
+	}
+	# Everything else: the web app, /config.json, the MCP (/mcp, OAuth, /api/...).
+	handle {
+		reverse_proxy codesignflo:3000 {
+			# wait_for_designer holds a request up to 50 s.
+			transport http {
+				read_timeout 120s
+			}
+		}
+	}
+}

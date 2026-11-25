@@ -1,0 +1,129 @@
+{
+  "story": "button--with-icon",
+  "root": {
+    "name": "button",
+    "width": 101.84,
+    "height": 35,
+    "sizing": {
+      "w": "hug",
+      "h": "hug"
+    },
+    "type": "FRAME",
+    "layout": {
+      "direction": "HORIZONTAL",
+      "gap": {
+        "value": 8,
+        "token": "space-2"
+      },
+      "padding": [
+        {
+          "value": 8,
+          "token": "space-2"
+        },
+        {
+          "value": 16,
+          "token": "space-4"
+        },
+        {
+          "value": 8,
+          "token": "space-2"
+        },
+        {
+          "value": 16,
+          "token": "space-4"
+        }
+      ],
+      "align": "CENTER",
+      "justify": "MIN"
+    },
+    "fill": {
+      "value": "#4f46e5",
+      "token": "color-brand-primary"
+    },
+    "stroke": {
+      "color": {
+        "value": "#00000000"
+      },
+      "width": 1
+    },
+    "radius": {
+      "value": 8,
+      "token": "radius-md"
+    },
+    "children": [
+      {
+        "name": "icon",
+        "width": 16,
+        "height": 16,
+        "sizing": {
+          "w": "fixed",
+          "h": "fixed"
+        },
+        "type": "FRAME",
+        "layout": {
+          "direction": "HORIZONTAL",
+          "gap": {
+            "value": 0
+          },
+          "padding": [
+            {
+              "value": 0
+            },
+            {
+              "value": 0
+            },
+            {
+              "value": 0
+            },
+            {
+              "value": 0
+            }
+          ],
+          "align": "STRETCH",
+          "justify": "MIN"
+        },
+        "children": [
+          {
+            "name": "svg",
+            "width": 16,
+            "height": 16,
+            "sizing": {
+              "w": "hug",
+              "h": "fill"
+            },
+            "type": "SVG",
+            "svg": "<svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"#ffffff\"><path d=\"M7 3h2v4h4v2H9v4H7V9H3V7h4z\"></path></svg>"
+          }
+        ]
+      },
+      {
+        "name": "text",
+        "width": 43.84,
+        "height": 17,
+        "sizing": {
+          "w": "hug",
+          "h": "hug"
+        },
+        "type": "TEXT",
+        "text": {
+          "characters": "Button",
+          "fontFamily": "Inter",
+          "fontWeight": {
+            "value": 500,
+            "token": "font-weight-medium"
+          },
+          "fontSize": {
+            "value": 14,
+            "token": "font-size-md"
+          },
+          "lineHeight": 0,
+          "letterSpacing": 0,
+          "color": {
+            "value": "#ffffff",
+            "token": "color-text-on-brand"
+          }
+        }
+      }
+    ]
+  }
+}

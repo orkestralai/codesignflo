@@ -1,0 +1,42 @@
+[
+  {
+    "layer": "body/button > text",
+    "prop": "characters",
+    "kind": "content",
+    "from": "\"Add to cart\"",
+    "to": "\"Add\"",
+    "variants": "all",
+    "items": ["fd6c326a4c", "371f31ddb7", "263179a7d7"],
+    "id": "C1"
+  },
+  {
+    "layer": "body/price",
+    "prop": "fills",
+    "kind": "token",
+    "from": "var(--color-text-secondary)",
+    "to": "var(--color-text-primary)",
+    "variants": "all",
+    "items": ["adb765f321", "8f7c6153a8", "145425117e"],
+    "id": "C2"
+  },
+  {
+    "layer": "body/price",
+    "prop": "fontName",
+    "kind": "typography",
+    "from": "font-weight 500 (var(--font-weight-medium))",
+    "to": "font-weight 600 (var(--font-weight-semibold))",
+    "variants": "all",
+    "items": ["fe34050664", "c5d27240ea", "5f1ed33a0e"],
+    "id": "C3"
+  },
+  {
+    "layer": "body",
+    "prop": "padding",
+    "kind": "token",
+    "from": "var(--space-3)",
+    "to": "var(--space-4)",
+    "variants": "all",
+    "items": ["ad02043cb9", "b7c71d8d31", "27b3ebe10a"],
+    "id": "C4"
+  }
+]

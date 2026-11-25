@@ -1,0 +1,28 @@
+.tipCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 320px;
+  box-sizing: border-box;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-tip-text);
+  font-family: var(--font-family-sans);
+}
+.title {
+  align-self: stretch;
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: normal;
+}
+.body {
+  align-self: stretch;
+  margin: 0;
+  font-size: 13px;
+  font-weight: var(--font-weight-regular);
+  line-height: normal;
+}
+.decoration { width: 24px; height: 4px; background: var(--color-tip-decoration); }

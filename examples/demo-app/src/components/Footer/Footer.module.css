@@ -1,0 +1,10 @@
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border-default);
+}
+.copy { font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+.links { display: flex; gap: var(--space-4); }
+.link { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none; }

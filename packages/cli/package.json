@@ -1,0 +1,32 @@
+{
+  "name": "@codesignflo/cli",
+  "version": "0.6.4",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "codesignflo": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/main.ts",
+    "pack:cli": "node scripts/pack.mjs"
+  },
+  "dependencies": {
+    "@codesignflo/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@supabase/supabase-js": "^2.117.3",
+    "pixelmatch": "^7.2.0",
+    "playwright": "1.65.0",
+    "pngjs": "^7.0.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/pngjs": "^6.0.5",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.25.12",
+    "tsx": "^4.20.0"
+  }
+}

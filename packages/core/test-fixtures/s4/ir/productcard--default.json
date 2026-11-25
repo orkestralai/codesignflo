@@ -1,0 +1,282 @@
+{
+  "story": "productcard--default",
+  "root": {
+    "name": "card",
+    "width": 320,
+    "height": 278,
+    "sizing": {
+      "w": "fill",
+      "h": "hug"
+    },
+    "type": "FRAME",
+    "layout": {
+      "direction": "VERTICAL",
+      "gap": {
+        "value": 0
+      },
+      "padding": [
+        {
+          "value": 0
+        },
+        {
+          "value": 0
+        },
+        {
+          "value": 0
+        },
+        {
+          "value": 0
+        }
+      ],
+      "align": "STRETCH",
+      "justify": "MIN"
+    },
+    "fill": {
+      "value": "#ffffff",
+      "token": "color-surface-default"
+    },
+    "stroke": {
+      "color": {
+        "value": "#e4e4e7",
+        "token": "color-border-default"
+      },
+      "width": 1
+    },
+    "radius": {
+      "value": 8,
+      "token": "radius-md"
+    },
+    "clip": true,
+    "children": [
+      {
+        "name": "image",
+        "width": 318,
+        "height": 160,
+        "sizing": {
+          "w": "fill",
+          "h": "fixed"
+        },
+        "type": "IMAGE",
+        "fill": {
+          "value": "#e0e7ff"
+        }
+      },
+      {
+        "name": "body",
+        "width": 318,
+        "height": 116,
+        "sizing": {
+          "w": "fill",
+          "h": "hug"
+        },
+        "type": "FRAME",
+        "layout": {
+          "direction": "VERTICAL",
+          "gap": {
+            "value": 8,
+            "token": "space-2"
+          },
+          "padding": [
+            {
+              "value": 12,
+              "token": "space-3"
+            },
+            {
+              "value": 12,
+              "token": "space-3"
+            },
+            {
+              "value": 12,
+              "token": "space-3"
+            },
+            {
+              "value": 12,
+              "token": "space-3"
+            }
+          ],
+          "align": "MIN",
+          "justify": "MIN"
+        },
+        "children": [
+          {
+            "name": "header",
+            "width": 294,
+            "height": 24,
+            "sizing": {
+              "w": "fill",
+              "h": "hug"
+            },
+            "type": "FRAME",
+            "layout": {
+              "direction": "HORIZONTAL",
+              "gap": {
+                "value": 8,
+                "token": "space-2"
+              },
+              "padding": [
+                {
+                  "value": 0
+                },
+                {
+                  "value": 0
+                },
+                {
+                  "value": 0
+                },
+                {
+                  "value": 0
+                }
+              ],
+              "align": "MIN",
+              "justify": "SPACE_BETWEEN"
+            },
+            "children": [
+              {
+                "name": "title",
+                "width": 81.38,
+                "height": 24,
+                "sizing": {
+                  "w": "hug",
+                  "h": "hug"
+                },
+                "type": "TEXT",
+                "text": {
+                  "characters": "Linen shirt",
+                  "fontFamily": "Inter",
+                  "fontWeight": {
+                    "value": 600,
+                    "token": "font-weight-semibold"
+                  },
+                  "fontSize": {
+                    "value": 16,
+                    "token": "font-size-lg"
+                  },
+                  "lineHeight": 24,
+                  "letterSpacing": 0,
+                  "color": {
+                    "value": "#18181b",
+                    "token": "color-text-primary"
+                  },
+                  "maxLines": 2
+                }
+              }
+            ]
+          },
+          {
+            "name": "price",
+            "width": 27.42,
+            "height": 17,
+            "sizing": {
+              "w": "hug",
+              "h": "hug"
+            },
+            "type": "TEXT",
+            "text": {
+              "characters": "€49",
+              "fontFamily": "Inter",
+              "fontWeight": {
+                "value": 500,
+                "token": "font-weight-medium"
+              },
+              "fontSize": {
+                "value": 14,
+                "token": "font-size-md"
+              },
+              "lineHeight": 0,
+              "letterSpacing": 0,
+              "color": {
+                "value": "#52525b",
+                "token": "color-text-secondary"
+              }
+            }
+          },
+          {
+            "name": "button",
+            "width": 108.27,
+            "height": 35,
+            "sizing": {
+              "w": "hug",
+              "h": "hug"
+            },
+            "type": "FRAME",
+            "component": {
+              "module": "Button",
+              "classes": ["button", "md", "primary"]
+            },
+            "layout": {
+              "direction": "HORIZONTAL",
+              "gap": {
+                "value": 8,
+                "token": "space-2"
+              },
+              "padding": [
+                {
+                  "value": 8,
+                  "token": "space-2"
+                },
+                {
+                  "value": 16,
+                  "token": "space-4"
+                },
+                {
+                  "value": 8,
+                  "token": "space-2"
+                },
+                {
+                  "value": 16,
+                  "token": "space-4"
+                }
+              ],
+              "align": "CENTER",
+              "justify": "MIN"
+            },
+            "fill": {
+              "value": "#4f46e5",
+              "token": "color-brand-primary"
+            },
+            "stroke": {
+              "color": {
+                "value": "#00000000"
+              },
+              "width": 1
+            },
+            "radius": {
+              "value": 8,
+              "token": "radius-md"
+            },
+            "children": [
+              {
+                "name": "text",
+                "width": 74.27,
+                "height": 17,
+                "sizing": {
+                  "w": "hug",
+                  "h": "hug"
+                },
+                "type": "TEXT",
+                "text": {
+                  "characters": "Add to cart",
+                  "fontFamily": "Inter",
+                  "fontWeight": {
+                    "value": 500,
+                    "token": "font-weight-medium"
+                  },
+                  "fontSize": {
+                    "value": 14,
+                    "token": "font-size-md"
+                  },
+                  "lineHeight": 0,
+                  "letterSpacing": 0,
+                  "color": {
+                    "value": "#ffffff",
+                    "token": "color-text-on-brand"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

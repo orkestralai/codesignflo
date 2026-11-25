@@ -1,0 +1,20 @@
+{
+  "name": "@codesignflo/plugin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pack:zip": "node scripts/build.mjs --release && node scripts/pack.mjs"
+  },
+  "dependencies": {
+    "@codesignflo/core": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.140.0",
+    "esbuild": "^0.25.0"
+  },
+  "version": "0.5.0"
+}

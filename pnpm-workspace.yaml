@@ -1,0 +1,6 @@
+packages:
+  - "packages/*"
+  - "examples/*"
+  - "service"
+onlyBuiltDependencies:
+  - esbuild

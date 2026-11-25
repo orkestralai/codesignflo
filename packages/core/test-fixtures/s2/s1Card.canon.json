@@ -1,0 +1,123 @@
+{
+  "clipsContent": true,
+  "constraints": {
+    "horizontal": "MIN",
+    "vertical": "MIN"
+  },
+  "cornerRadius": 0,
+  "fills": [
+    {
+      "color": {
+        "b": 1,
+        "g": 1,
+        "r": 1
+      },
+      "opacity": 1,
+      "type": "SOLID",
+      "visible": true
+    }
+  ],
+  "height": 200,
+  "layout": {
+    "counterAxisAlignItems": "MIN",
+    "itemSpacing": 8,
+    "layoutWrap": "NO_WRAP",
+    "mode": "VERTICAL",
+    "paddingBottom": 12,
+    "paddingLeft": 12,
+    "paddingRight": 12,
+    "paddingTop": 12,
+    "primaryAxisAlignItems": "MIN",
+    "strokesIncludedInLayout": true
+  },
+  "name": "S1 Card",
+  "opacity": 1,
+  "rotation": 0,
+  "type": "FRAME",
+  "visible": true,
+  "width": 240,
+  "k": "card",
+  "children": [
+    {
+      "clipsContent": true,
+      "cornerRadius": 0,
+      "fills": [
+        {
+          "color": {
+            "b": 0.95,
+            "g": 0.9,
+            "r": 0.9
+          },
+          "opacity": 1,
+          "type": "SOLID",
+          "visible": true
+        }
+      ],
+      "height": 120,
+      "layoutSizingHorizontal": "FIXED",
+      "layoutSizingVertical": "FIXED",
+      "name": "Image",
+      "opacity": 1,
+      "rotation": 0,
+      "type": "FRAME",
+      "visible": true,
+      "width": 216,
+      "k": "card/Image",
+      "children": []
+    },
+    {
+      "clipsContent": true,
+      "cornerRadius": 0,
+      "fills": [
+        {
+          "color": {
+            "b": 0.95,
+            "g": 0.9,
+            "r": 0.9
+          },
+          "opacity": 1,
+          "type": "SOLID",
+          "visible": true
+        }
+      ],
+      "height": 20,
+      "layoutSizingHorizontal": "FIXED",
+      "layoutSizingVertical": "FIXED",
+      "name": "Title",
+      "opacity": 1,
+      "rotation": 0,
+      "type": "FRAME",
+      "visible": true,
+      "width": 216,
+      "k": "card/Title",
+      "children": []
+    },
+    {
+      "clipsContent": true,
+      "cornerRadius": 0,
+      "fills": [
+        {
+          "color": {
+            "b": 0.95,
+            "g": 0.9,
+            "r": 0.9
+          },
+          "opacity": 1,
+          "type": "SOLID",
+          "visible": true
+        }
+      ],
+      "height": 20,
+      "layoutSizingHorizontal": "FIXED",
+      "layoutSizingVertical": "FIXED",
+      "name": "Price",
+      "opacity": 1,
+      "rotation": 0,
+      "type": "FRAME",
+      "visible": true,
+      "width": 216,
+      "k": "card/Price",
+      "children": []
+    }
+  ]
+}
