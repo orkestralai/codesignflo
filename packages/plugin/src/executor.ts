@@ -1746,6 +1746,25 @@ async function designCopy(design: { node: SceneNode; at: string }, spec: SpecNod
 }
 
 /** The designer's own instances of the component they designed now point at the Live component. */
+/**
+ * A second copy of a component or page under the same key, left by an update applied twice at once (plugin 0.5.4
+ * and earlier): what's placed from its variants goes to the kept one's (same variant), and the copy goes. Kept: the
+ * one the update found, which everything since was built from.
+ */
+async function dropStrays(sec: SectionNode, k: string, keep: SceneNode, stats: Stats) {
+  const strays = sec.children.filter((n) => n !== keep && keyOf(n) === k && isOriginal(n));
+  for (const s of strays) {
+    if (s.type === "COMPONENT_SET" && keep.type === "COMPONENT_SET")
+      for (const v of s.children) {
+        const match = keep.children.find((x) => x.name === v.name);
+        if (v.type === "COMPONENT" && match?.type === "COMPONENT") await swapInstances(v, match);
+      }
+    s.locked = false;
+    s.remove();
+    stats.deleted++;
+  }
+}
+
 async function swapInstances(from: ComponentNode, to: ComponentNode) {
   await figma.loadAllPagesAsync();
   for (const inst of figma.root.findAll((n) => n.type === "INSTANCE") as InstanceNode[]) {
@@ -2288,6 +2307,7 @@ export async function reconcile(p0: { spec: SpecNode; gen?: string; adoptFrom?: 
   const p = { ...p0, specHash: builtHash(p0.specHash) };
   {
     const existing = indexKeyed(await section()).get(p.spec.k);
+    if (existing && !previewSec) await dropStrays(await section(), p.spec.k, existing, stats);
     if (existing && builtFrom(existing, p.specHash)) {
       if (p.gen && existing.getSharedPluginData(NS, NODE.gen) !== p.gen) existing.setSharedPluginData(NS, NODE.gen, p.gen);
       setSrc(existing, p0.specHash);
@@ -2374,6 +2394,7 @@ export async function reconcileScreen(p0: {
   const component = p.spec.k.replace(/^screen:/, "");
   const screens = await screensSection();
   const existing = indexKeyed(screens).get(p.spec.k);
+  if (existing && !previewSec) await dropStrays(screens, p.spec.k, existing, stats);
   // Live shows what the app draws. The designer's design (the newest one the code implemented) is what it's
   // compared with — and its base only while the app follows it closely.
   const fresh = p.adoptFrom ? ((await figma.getNodeByIdAsync(p.adoptFrom)) as SceneNode | null) : null;

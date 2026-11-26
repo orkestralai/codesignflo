@@ -713,7 +713,23 @@ function localProgress(p: LocalProgress) {
 let applyingId: number | null = null;
 let billingCheckedAt = 0;
 let lanesCheckedAt = 0;
+/**
+ * One at a time: started by a timer, by the service's signals and by the panel, and it waits on the service before
+ * it marks itself as applying — two starts close together both took the same update and built Live twice over (a
+ * second set of a component, its layers moved into it, the first left empty: plugin 0.5.4 and earlier).
+ */
+let pendingRunning = false;
 async function applyPending() {
+  if (pendingRunning) return;
+  pendingRunning = true;
+  try {
+    await applyPendingNow();
+  } finally {
+    pendingRunning = false;
+  }
+}
+
+async function applyPendingNow() {
   // A panel replaced by a development hot reload stops here (its timer would otherwise keep running, take
   // an update and wait forever for answers that go to the new panel).
   if (retiring || !cloud?.project || applying || !view?.setUp || $("conn").classList.contains("on")) return;
