@@ -103,7 +103,7 @@ export function landingHtml(c: LandingConfig): string {
     </div>
   </section>
 
-  <section id="about" class="lp-section lp-white">
+  <section id="about" class="lp-section lp-paper">
     <div class="lp-container">
       <div class="lp-head">
         <p class="lp-eyebrow">About</p>
@@ -126,6 +126,23 @@ export function landingHtml(c: LandingConfig): string {
         <p class="lp-lead lp-on-dark">Nobody exports, uploads or redraws anything: the code draws Live, the designer changes a copy, the agent brings it back.</p>
       </div>
       <ol class="lp-loop">${loop}</ol>
+    </div>
+  </section>
+
+  <section class="lp-section lp-white">
+    <div class="lp-container">
+      <div class="lp-head">
+        <p class="lp-eyebrow">Day to day</p>
+        <h2 class="lp-title-sm">No more <span class="lp-hl-text">handoff.</span></h2>
+      </div>
+      <div class="lp-grid lp-three">
+        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Code → Figma</p><h3>Live follows the code</h3><p>Commit on the Live branch and Live updates in Figma: new components appear, changed pages are redrawn, and each page carries a screenshot of the app as the browser draws it, to compare.</p></div>
+        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Figma → code</p><h3>Designs go to the code</h3><p>The designer sends a proposal; the developer reviews it with their agent, one design at a time, and builds it. Questions go back to the designer from inside the agent.</p></div>
+        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Both ways</p><h3>Nothing gets lost</h3><p>Hand-made tweaks in Live can be kept as design. Clashes between a proposal and code that moved meanwhile are flagged, with the designer's version winning by default.</p></div>
+        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Teams</p><h3>Everyone knows who's on what</h3><p>Designers and developers each sign in with their own account. One designer works on a component at a time, developers say what they're building, and everyone hears about it by email or Slack.</p></div>
+        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Before merging</p><h3>Branch previews</h3><p>Show a feature branch in Figma before it's merged: only what differs from Live, in its own section beside it. It goes away once the branch is merged.</p></div>
+        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Design system</p><h3>Your components, linked</h3><p>Link your Figma components to the code's: Live's pages are drawn with yours, and each pair shows where your design and the app differ.</p></div>
+      </div>
     </div>
   </section>
 
@@ -167,24 +184,42 @@ export function landingHtml(c: LandingConfig): string {
     </div>
   </section>
 
-  <section class="lp-section lp-white">
+  <section id="pricing" class="lp-section lp-dark lp-pricing">
     <div class="lp-container">
       <div class="lp-head">
-        <p class="lp-eyebrow">Day to day</p>
-        <h2 class="lp-title-sm">No more <span class="lp-hl-text">handoff.</span></h2>
+        <p class="lp-eyebrow lp-blue-text">Pricing</p>
+        <h2 class="lp-title-sm">Pay for designers. <span class="lp-hl-text">Developers are free.</span></h2>
+        <p class="lp-lead lp-on-dark">Every designer sends their first ${FREE_SENDS} designs to dev for free. No card needed to start.</p>
       </div>
-      <div class="lp-grid lp-three">
-        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Code → Figma</p><h3>Live follows the code</h3><p>Commit on the Live branch and Live updates in Figma: new components appear, changed pages are redrawn, and each page carries a screenshot of the app as the browser draws it, to compare.</p></div>
-        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Figma → code</p><h3>Designs go to the code</h3><p>The designer sends a proposal; the developer reviews it with their agent, one design at a time, and builds it. Questions go back to the designer from inside the agent.</p></div>
-        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Both ways</p><h3>Nothing gets lost</h3><p>Hand-made tweaks in Live can be kept as design. Clashes between a proposal and code that moved meanwhile are flagged, with the designer's version winning by default.</p></div>
-        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Teams</p><h3>Everyone knows who's on what</h3><p>Designers and developers each sign in with their own account. One designer works on a component at a time, developers say what they're building, and everyone hears about it by email or Slack.</p></div>
-        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Before merging</p><h3>Branch previews</h3><p>Show a feature branch in Figma before it's merged: only what differs from Live, in its own section beside it. It goes away once the branch is merged.</p></div>
-        <div class="lp-card lp-lift"><p class="lp-eyebrow lp-blue-text">Design system</p><h3>Your components, linked</h3><p>Link your Figma components to the code's: Live's pages are drawn with yours, and each pair shows where your design and the app differ.</p></div>
+      <div class="lp-grid lp-two">
+        <div class="lp-card">
+          <p class="lp-eyebrow lp-blue-text">Developers</p>
+          <p class="lp-offer"><span>Always free</span><span class="lp-offer-alt">Unlimited developers</span></p>
+          <h3 class="lp-price">€0 <span class="lp-muted">per developer / month</span></h3>
+          <p class="lp-small">No card, no trial. Free in every project.</p>
+          <p>As many developers as you like, in every project: sync, Live, branch previews, the coding agent tools.</p>
+        </div>
+        <div class="lp-card">
+          <p class="lp-eyebrow lp-blue-text">Designers</p>
+          ${
+            launchOn()
+              ? `<p class="lp-offer"><span>${FREE_SENDS} sends to dev free</span><span class="lp-offer-alt">Launch price until ${LAUNCH.until}</span></p>
+          <h3 class="lp-price"><s class="lp-was" aria-label="Regular price €${SEAT_EUR}">€${SEAT_EUR}</s> €${LAUNCH.eur} <span class="lp-muted">per designer / month</span></h3>
+          <p class="lp-small">VAT included. For your first ${LAUNCH.months} months when you subscribe by ${LAUNCH.until}; then €${SEAT_EUR}.</p>`
+              : `<p class="lp-offer"><span>${FREE_SENDS} sends to dev free</span></p>
+          <h3 class="lp-price">€${SEAT_EUR} <span class="lp-muted">per designer / month</span></h3>
+          <p class="lp-small">VAT included.</p>`
+          }
+          <p>A seat belongs to the designer and works in every project, theirs or anyone's. Pay for your own, or for your team's designers by email. Cancel any time.</p>
+        </div>
       </div>
+      <p class="lp-vat">${VAT_NOTE}</p>
+      <p class="lp-vat">Invite a designer: their second month is free, and you get a month free when it starts. <a href="/terms">Terms</a></p>
+      <p class="lp-vat">Prices are for the hosted service. On your own server, CoDesignFlo is free: no seats, no limits. <a href="#selfhost" data-scroll="selfhost">Self-hosting</a></p>
     </div>
   </section>
 
-  <section id="selfhost" class="lp-section lp-paper">
+  <section id="selfhost" class="lp-section lp-white">
     <div class="lp-container">
       <div class="lp-head">
         <p class="lp-eyebrow">Open source</p>
@@ -218,41 +253,6 @@ export function landingHtml(c: LandingConfig): string {
         </div>
       </div>
       <p class="lp-vat">The Figma plugin, the CLI and the engine are MIT-licensed. The service and the self-hosting setup are under the Functional Source License: free for your own use, including running it for your team or your clients, not for offering a competing service; each release becomes Apache 2.0 after two years.</p>
-    </div>
-  </section>
-
-  <section id="pricing" class="lp-section lp-dark lp-pricing">
-    <div class="lp-container">
-      <div class="lp-head">
-        <p class="lp-eyebrow lp-blue-text">Pricing</p>
-        <h2 class="lp-title-sm">Pay for designers. <span class="lp-hl-text">Developers are free.</span></h2>
-        <p class="lp-lead lp-on-dark">Every designer sends their first ${FREE_SENDS} designs to dev for free. No card needed to start.</p>
-      </div>
-      <div class="lp-grid lp-two">
-        <div class="lp-card">
-          <p class="lp-eyebrow lp-blue-text">Developers</p>
-          <p class="lp-offer"><span>Always free</span><span class="lp-offer-alt">Unlimited developers</span></p>
-          <h3 class="lp-price">€0 <span class="lp-muted">per developer / month</span></h3>
-          <p class="lp-small">No card, no trial. Free in every project.</p>
-          <p>As many developers as you like, in every project: sync, Live, branch previews, the coding agent tools.</p>
-        </div>
-        <div class="lp-card">
-          <p class="lp-eyebrow lp-blue-text">Designers</p>
-          ${
-            launchOn()
-              ? `<p class="lp-offer"><span>${FREE_SENDS} sends to dev free</span><span class="lp-offer-alt">Launch price until ${LAUNCH.until}</span></p>
-          <h3 class="lp-price"><s class="lp-was" aria-label="Regular price €${SEAT_EUR}">€${SEAT_EUR}</s> €${LAUNCH.eur} <span class="lp-muted">per designer / month</span></h3>
-          <p class="lp-small">VAT included. For your first ${LAUNCH.months} months when you subscribe by ${LAUNCH.until}; then €${SEAT_EUR}.</p>`
-              : `<p class="lp-offer"><span>${FREE_SENDS} sends to dev free</span></p>
-          <h3 class="lp-price">€${SEAT_EUR} <span class="lp-muted">per designer / month</span></h3>
-          <p class="lp-small">VAT included.</p>`
-          }
-          <p>A seat belongs to the designer and works in every project, theirs or anyone's. Pay for your own, or for your team's designers by email. Cancel any time.</p>
-        </div>
-      </div>
-      <p class="lp-vat">${VAT_NOTE}</p>
-      <p class="lp-vat">Invite a designer: their second month is free, and you get a month free when it starts. <a href="/terms">Terms</a></p>
-      <p class="lp-vat">Prices are for the hosted service. On your own server, CoDesignFlo is free: no seats, no limits. <a href="#selfhost" data-scroll="selfhost">Self-hosting</a></p>
     </div>
   </section>
 
