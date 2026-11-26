@@ -27,6 +27,50 @@ const segments = (children: IRNode[] = []) => {
 };
 const childAt = (n: IRNode | undefined, seg: string) => n && segments(n.children).find(([, s]) => s === seg)?.[0];
 
+/**
+ * How an element looks, layer by layer, apart from what an instance override can change (its texts and their
+ * colour, the root's fill, padding and gap): structure, nested fills, borders, corners, opacity, shadows,
+ * drawings and text styles. An instance draws its main component's layers, so a usage whose signature differs
+ * from its variant's (a checkbox without the label, a plan card that isn't the highlighted one, a switch that
+ * is off) would show the main component's look instead of the page's.
+ */
+export const lookSignature = (root: IRNode): string[] => {
+  const out: string[] = [];
+  const walk = (m: IRNode, path: string, isRoot: boolean) => {
+    const t = m.text;
+    out.push(
+      [
+        path,
+        m.type,
+        isRoot ? "" : (m.fill?.value ?? ""),
+        m.gradient ? JSON.stringify(m.gradient.stops.map((x) => x.color.value)) : "",
+        m.stroke ? `${m.stroke.color.value}/${m.stroke.width}/${m.stroke.sides ?? ""}` : "",
+        m.radius ? m.radius.value : "",
+        m.opacity ?? "",
+        m.shadow ?? "",
+        m.svg ?? "",
+        m.image?.ref ?? "",
+        t ? `${t.fontFamily}/${t.fontWeight.value}/${t.fontSize.value}/${t.italic ?? ""}/${t.case ?? ""}` : "",
+      ].join("|"),
+    );
+    for (const [c, seg] of segments(m.children)) walk(c, `${path}/${seg}`, false);
+  };
+  walk(root, "", true);
+  return out;
+};
+/** How many layers differ between two signatures (in either). */
+const lookDistance = (a: string[], b: string[]) => {
+  const left = new Map<string, number>();
+  for (const x of a) left.set(x, (left.get(x) ?? 0) + 1);
+  let diff = 0;
+  for (const x of b) {
+    const n = left.get(x) ?? 0;
+    if (n) left.set(x, n - 1);
+    else diff++;
+  }
+  return diff + [...left.values()].reduce((s, n) => s + n, 0);
+};
+
 /** A styled range of a text layer: `start`/`end` index its characters. */
 export type SpecRun = {
   start: number;
@@ -422,7 +466,8 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
     // same modules will do; with none, it's built as a frame with the page's content.
     const modules = (m: IRNode): string[] => [...(m.module ? [m.module] : []), ...(m.children ?? []).flatMap(modules)];
     const needed = [...new Set(modules(n))].filter((x) => !byModule.has(x));
-    let best: { props: Record<string, string>; score: number; story: string } | null = null;
+    let best: { props: Record<string, string>; score: number; story: string; distance: number } | null = null;
+    const look = lookSignature(n);
     for (const [story, props] of Object.entries(target.stories)) {
       if (only && !only.includes(story)) continue;
       const has = new Set(modules(irs.get(story)!.root));
@@ -430,9 +475,15 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
       const theirs = new Set(shape(irs.get(story)!.root));
       const jaccard = [...mine].filter((x) => theirs.has(x)).length / new Set([...mine, ...theirs]).size;
       const score = Object.values(props).filter((x) => classes.has(x)).length + jaccard;
-      if (!best || score > best.score + 1e-9) best = { props, score, story };
+      // The variant that looks like this usage wins; the score breaks ties (class names, structure).
+      const distance = lookDistance(look, lookSignature(irs.get(story)!.root));
+      if (!best || distance < best.distance || (distance === best.distance && score > best.score + 1e-9))
+        best = { props, score, story, distance };
     }
     if (!best) return undefined;
+    // No variant looks like it: an instance would show the variant's look, not the page's (all three plan cards
+    // highlighted, a checkbox's label beside every table row). Built as a frame from the page instead.
+    if (best.distance > 0) return undefined;
     const main = irs.get(best.story)?.root;
     const overrides: InstanceOverride[] = [];
     // The main component's layer at the same path (by layer names), to see what this usage changes.
@@ -501,13 +552,31 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
     parentLayout: IRNode["layout"] | null,
     isVariantRoot: boolean,
     rootType: "COMPONENT" | "FRAME" = "COMPONENT",
-  ): SpecNode => ({
-    ...build(n, k, parentLayout, isVariantRoot, rootType),
-    // Margin spacers (and anything else the page didn't measure) have no size of their own to check.
-    ...(n.width > 0 && n.height > 0
-      ? { measured: { w: Math.round(n.width), h: Math.round(n.height), ...(n.at ? { x: Math.round(n.at.x), y: Math.round(n.at.y) } : {}) } }
-      : {}),
-  });
+  ): SpecNode =>
+    // A story whose root is an <svg> (an icon component): a variant must be a component in Figma (an SVG one
+    // failed combineAsVariants and stopped the update), so the drawing goes inside a component its size.
+    isVariantRoot && n.type === "SVG"
+      ? {
+          k,
+          type: rootType,
+          name: n.name,
+          props: { width: n.width, height: n.height, fills: [] },
+          children: [node(n, `${k}/${n.name}`, null, false)],
+          ...(n.width > 0 && n.height > 0 ? { measured: { w: Math.round(n.width), h: Math.round(n.height) } } : {}),
+        }
+      : {
+          ...build(n, k, parentLayout, isVariantRoot, rootType),
+          // Margin spacers (and anything else the page didn't measure) have no size of their own to check.
+          ...(n.width > 0 && n.height > 0
+            ? {
+                measured: {
+                  w: Math.round(n.width),
+                  h: Math.round(n.height),
+                  ...(n.at ? { x: Math.round(n.at.x), y: Math.round(n.at.y) } : {}),
+                },
+              }
+            : {}),
+        };
 
   const build = (
     n: IRNode,

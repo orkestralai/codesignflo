@@ -328,3 +328,38 @@ describe("components styled with utility classes (Tailwind)", () => {
     expect(screen!.coverage.instances).toEqual({ "components.alert-box": 1 });
   });
 });
+
+describe("an icon component (a story whose root is an <svg>)", () => {
+  it("each variant is a component its size with the drawing inside (Figma variants must be components)", () => {
+    const svg = (size: number) => ({
+      type: "SVG",
+      name: "svg",
+      width: size,
+      height: size,
+      sizing: { w: "fixed", h: "fixed" },
+      svg: "<svg/>",
+    });
+    const registry = {
+      components: {
+        "star-icon": {
+          module: "StarIcon",
+          title: "StarIcon",
+          files: [],
+          stories: { "star--default": { size: 16 }, "star--large": { size: 24 } },
+        },
+      },
+      screens: {},
+    };
+    const irs = new Map([
+      ["star--default", { story: "star--default", root: svg(16) }],
+      ["star--large", { story: "star--large", root: svg(24) }],
+    ]) as never;
+    const [set] = compile(registry as never, irs, new Map());
+    for (const [i, size] of [16, 24].entries()) {
+      const v = set!.children![i]!;
+      expect(v.type).toBe("COMPONENT");
+      expect(v.props).toMatchObject({ width: size, height: size });
+      expect(v.children?.map((c) => [c.type, c.k])).toEqual([["SVG", `${v.k}/svg`]]);
+    }
+  });
+});

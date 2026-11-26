@@ -399,6 +399,67 @@
         .lp-top .lp-button { width: auto; }
         .lp-lead { font-size: 17px; }
       }
+
+      /* ── Brutalist pass: heavy rules, hard offset shadows, stamps, outlined numerals, a ticker. ── */
+      .lp-top { border-bottom-width: 3px; }
+      .lp-hero, .lp-section { border-top: 4px solid var(--ink); }
+      .lp-hero { border-top: 0; border-bottom: 0; position: relative; overflow: hidden; }
+      /* A faint grid behind the hero, fading out from the centre. */
+      .lp-hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+        background: linear-gradient(#e4e4e7 1px, transparent 1px), linear-gradient(90deg, #e4e4e7 1px, transparent 1px);
+        background-size: 48px 48px; -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 25%, transparent 72%); mask-image: radial-gradient(ellipse at 50% 30%, #000 25%, transparent 72%); }
+      .lp-hero > .lp-container { position: relative; }
+      /* The hero's label: a tilted blue stamp. */
+      .lp-hero .lp-boxed { background: var(--blue); color: #fff; border: 2px solid var(--ink); padding: 7px 14px; transform: rotate(-2deg); box-shadow: 4px 4px 0 var(--ink); margin-bottom: 26px; }
+      .lp-title { font-size: clamp(2.3rem, 6vw, 4.9rem); }
+      .lp-title-sm { font-size: clamp(1.9rem, 4.2vw, 3.3rem); }
+      /* Section labels: black chips (white on dark sections). */
+      .lp-head > .lp-eyebrow { display: inline-block; background: var(--ink); color: #fff; padding: 5px 10px; letter-spacing: 0.12em; font-weight: 900; }
+      .lp-dark .lp-head > .lp-eyebrow { background: #fff; color: var(--ink); }
+      /* Buttons: thick border and a hard shadow that presses in on hover. */
+      .lp-button { border-width: 2px; box-shadow: 5px 5px 0 var(--blue); }
+      .lp-button.lp-primary { border-color: var(--ink); box-shadow: 5px 5px 0 var(--ink); }
+      .lp-button.lp-outline { box-shadow: 5px 5px 0 var(--ink); }
+      .lp-button.lp-small { box-shadow: 3px 3px 0 var(--blue); }
+      .lp-top .lp-button { box-shadow: none; }
+      .lp-section .lp-button:hover, .lp-hero .lp-button:hover { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--ink); }
+      .lp-button.lp-small:hover { transform: translate(2px, 2px) !important; box-shadow: 1px 1px 0 var(--blue) !important; }
+      .lp-dark .lp-button.lp-primary { border-color: #fff; box-shadow: 5px 5px 0 #fff; }
+      .lp-ask .lp-button.lp-primary { box-shadow: 4px 4px 0 var(--blue); }
+      /* Cards: heavier border and a hard shadow; on hover they lift onto a blue one. */
+      .lp-card { border-width: 3px; box-shadow: 8px 8px 0 var(--ink); }
+      .lp-lift:hover { transform: translate(-2px, -2px); border-color: var(--ink); box-shadow: 12px 12px 0 var(--blue); }
+      .lp-dark .lp-card, .lp-pricing .lp-card { box-shadow: 8px 8px 0 var(--blue); }
+      .lp-grid { gap: 28px; }
+      /* How it works: the step numbers as big outlined blue numerals. */
+      .lp-loop { border: 3px solid #fff; }
+      .lp-step { border-right-width: 2px; border-right-color: rgba(255,255,255,0.35); transition: background 160ms; }
+      .lp-step:hover { background: rgba(45,108,223,0.18); }
+      .lp-n { display: block; font-size: 64px; letter-spacing: 0; color: transparent; -webkit-text-stroke: 2px var(--blue); }
+      .lp-step:not(:last-child)::after { border: 2px solid #fff; box-shadow: 3px 3px 0 #fff; }
+      @media (min-width: 601px) { .lp-step:not(:last-child)::after { top: 40px; } }
+      /* Good to know: heavy rules, the question turns blue on hover. */
+      .lp-qa { border-top-width: 3px; }
+      .lp-qa:hover h3 { color: var(--blue); }
+      .lp-ask { border: 3px solid var(--ink); box-shadow: 10px 10px 0 var(--blue); }
+      /* The ticker: the Day to day titles scrolling on a black band. */
+      .lp-marquee { overflow: hidden; background: var(--ink); color: #fff; border-top: 4px solid var(--ink); padding: 16px 0; }
+      .lp-marquee-track { display: flex; width: max-content; animation: lp-marquee 42s linear infinite; }
+      .lp-marquee:hover .lp-marquee-track { animation-play-state: paused; }
+      .lp-marquee span { padding: 0 26px; white-space: nowrap; font: 900 clamp(16px, 2.2vw, 24px)/1 "Space Grotesk", Inter, sans-serif; text-transform: uppercase; letter-spacing: 0.02em; }
+      .lp-marquee b { color: var(--blue); font-size: 20px; line-height: 1; }
+      @keyframes lp-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+      .lp-marquee + .lp-section { border-top: 0; }
+      /* The demo video: a hard-shadowed frame. */
+      .lp-product { border: 3px solid var(--ink); border-radius: 0; box-shadow: 14px 14px 0 var(--blue); }
+      @media (max-width: 600px) {
+        .lp-card { box-shadow: 5px 5px 0 var(--ink); }
+        .lp-product { box-shadow: 8px 8px 0 var(--blue); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .lp-marquee-track { animation: none; }
+        .lp-section .lp-button:hover, .lp-hero .lp-button:hover, .lp-lift:hover { transform: none; }
+      }
     </style>
   </head>
   <body>

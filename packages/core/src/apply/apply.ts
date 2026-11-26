@@ -406,11 +406,22 @@ export async function applyUpdate(
   const builtSets: { key: string; id: string; gen: string }[] = [];
   for (const set of sets) {
     const adopt = adoptFrom(set.k);
-    const r = await s.call<{ id: string; stats: Stats; skipped?: boolean }>(
-      "reconcile",
-      { spec: set, ...adopt, ...(handEdited.has(set.k) || adopt.adoptFrom ? {} : { specHash: specHashOf(set) }) },
-      { timeoutMs: 180_000 },
-    );
+    // One component that can't be built doesn't stop the others, or the pages after them (it used to: a single
+    // failing component left Live with half its components and no pages).
+    let r: { id: string; stats: Stats; skipped?: boolean };
+    try {
+      r = await s.call<{ id: string; stats: Stats; skipped?: boolean }>(
+        "reconcile",
+        { spec: set, ...adopt, ...(handEdited.has(set.k) || adopt.adoptFrom ? {} : { specHash: specHashOf(set) }) },
+        { timeoutMs: 180_000 },
+      );
+    } catch (e) {
+      notes.push(
+        `${set.k}: couldn't update this component in Live (${(e as Error).message}) — the rest of the update went on; it's tried again next time`,
+      );
+      step(set.k);
+      continue;
+    }
     liveIds[set.k] = r.id;
     for (const e of r.stats.errors) if (!e.startsWith("bind grid")) notes.push(`${set.k}: ${e}`);
     recordDifferences(set.k, set.k, r.stats);

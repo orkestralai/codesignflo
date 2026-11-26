@@ -70,10 +70,18 @@ export async function applyOps(p: { ops: Op[] }) {
         case "layout.itemSpacing":
           n.itemSpacing = op.value as number;
           break;
-        case "characters":
-          await figma.loadFontAsync(n.fontName as FontName);
+        case "characters": {
+          // Mixed styles: fontName is figma.mixed, so load every font in the text.
+          const t = n as unknown as TextNode;
+          const fonts: FontName[] = t.characters.length
+            ? t.getRangeAllFontNames(0, t.characters.length)
+            : t.fontName === figma.mixed
+              ? []
+              : [t.fontName];
+          await Promise.all(fonts.map((f) => figma.loadFontAsync(f)));
           n.characters = op.value as string;
           break;
+        }
         case "fontName":
           await figma.loadFontAsync(op.value as FontName);
           n.fontName = op.value as FontName;

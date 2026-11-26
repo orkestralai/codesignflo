@@ -47,6 +47,7 @@ export { type LiveRow, liveStateLine, RETAKE_MS, STALLED_MS } from "./apply/live
 export { type SpecChanges, specChanges, specsByKey } from "./apply/patch.js";
 export { predictLive } from "./apply/predict.js";
 export { applyPreview, type PreviewResult, previewItems } from "./apply/preview.js";
+export { parseTokenColor, type TokenRGBA } from "./compile/color.js";
 export {
   compile,
   compileScreens,

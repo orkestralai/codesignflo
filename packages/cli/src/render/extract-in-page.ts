@@ -172,12 +172,13 @@ export function extractInPage(): IRNode {
     if (/^table-(cell|row|header-group|row-group|footer-group|column)$/.test(getComputedStyle(el).display)) return "fixed";
     // As wide as its content (Tailwind's w-fit): not stretched across its column.
     if (/^(fit-content|max-content|min-content)$/.test(w)) return "hug";
-    if (grows(el, "row")) return "fill";
     // A max-width that caps the element (a chat bubble) is its width: its text wraps inside it (M6). Computed
-    // values: px whatever unit the CSS used.
+    // values: px whatever unit the CSS used. Before "grows": a flex: 1 column held at its max-width (a settings
+    // form, 880px beside a sidebar) filled the whole row in Figma, 952px of form instead of 800.
     const ecs = getComputedStyle(el);
     const width = el.getBoundingClientRect().width;
     if (/px$/.test(ecs.maxWidth) && Math.abs(width - parseFloat(ecs.maxWidth)) < 0.5) return "fixed";
+    if (grows(el, "row")) return "fill";
     // A min-width that holds the element wider than its content is its width (a centred quantity).
     if (/px$/.test(ecs.minWidth) && parseFloat(ecs.minWidth) > 0 && Math.abs(width - parseFloat(ecs.minWidth)) < 0.5) return "fixed";
     // A flex item with a set basis that doesn't grow (basis-[360px], flex: 0 0 360px) is that wide.
@@ -532,6 +533,11 @@ export function extractInPage(): IRNode {
             .join("\n")
             .trim()
         : raw.replace(/\s+/g, " ").trim();
+  /** A table cell's vertical-align as a Figma alignment (middle and the default baseline-ish values: centre). */
+  const cellAlign = (c: Element | undefined): "MIN" | "CENTER" | "MAX" => {
+    const va = c ? getComputedStyle(c).verticalAlign : "middle";
+    return va === "top" ? "MIN" : va === "bottom" ? "MAX" : "CENTER";
+  };
   /** Positioned children's z-index (auto: 0), for the order they're drawn in. */
   const zOf = new WeakMap<IRNode, number>();
   /**
@@ -802,8 +808,14 @@ export function extractInPage(): IRNode {
       return { ...base, type: "SVG", svg };
     }
     const flow = flowNodes(el);
+    // Not drawn by the browser: display none, hidden, or fully transparent (a native radio kept for the keyboard
+    // under a custom one, opacity 0: Live drew it as a loose circle beside every option).
+    const shown = (c: Element) => {
+      const k = getComputedStyle(c);
+      return k.display !== "none" && k.visibility !== "hidden" && parseFloat(k.opacity) !== 0;
+    };
     const elementKids = flow.filter(
-      (c) => c.nodeType === Node.ELEMENT_NODE && getComputedStyle(c as Element).display !== "none" && !screenReaderOnly(c as HTMLElement),
+      (c) => c.nodeType === Node.ELEMENT_NODE && shown(c as Element) && !screenReaderOnly(c as HTMLElement),
     ) as HTMLElement[];
     // The element's text as one run: React writes {pct}% as two text nodes ("62", "%"), shown as "62%"
     // (joined with a space, Live read "62 %", and the wider text was cut with "…" to the app's width).
@@ -913,8 +925,10 @@ export function extractInPage(): IRNode {
           tok(px(cs.paddingBottom), sideToken(el, "padding", 2, "padding-bottom")),
           tok(px(cs.paddingLeft), sideToken(el, "padding", 3, "padding-left")),
         ],
+        // A table cell lines up its content by vertical-align (middle by default in a table): Live drew every
+        // cell's content at the top of its row. (The row stretches its cells, which carry the row's borders.)
         align: flex ? align(cs.alignItems) : "STRETCH",
-        justify: flex ? justify(cs.justifyContent) : "MIN",
+        justify: flex ? justify(cs.justifyContent) : display === "table-cell" ? cellAlign(el) : "MIN",
         // A row of cards that wraps onto more rows (flex-wrap), rows apart by the row gap.
         // Only when it does wrap: a row that fits on one line in the browser, wrapping in Figma, put its last
         // item on a line of its own for a fraction of a pixel of text (Live: "Delete" below the other actions).

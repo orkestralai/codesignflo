@@ -9,6 +9,7 @@ import {
   mapVariant,
   NODE,
   NS,
+  parseTokenColor,
   parseVariant,
   type SpecNode,
   specChanges,
@@ -135,10 +136,15 @@ export async function tokensPush(p: { dtcg: Record<string, unknown> }) {
       if (t === "color") {
         rtype = "COLOR";
         // With its alpha: a scrim or a 10% tint drawn solid hid what's behind it.
-        value = { ...rgb(String(raw)), a: alpha(String(raw)) };
+        const c = parseTokenColor(raw);
+        // A value Figma can't take (hsl(), a colour name…) is left out, never sent: one bad token
+        // used to fail the whole Live update in setValueForMode.
+        if (!c) return void stats.errors.push(`token ${name}: colour "${String(raw)}" not read`);
+        value = c;
       } else if (t === "dimension" || t === "fontWeight") {
         rtype = "FLOAT";
         value = Number.parseFloat(String(raw));
+        if (!Number.isFinite(value)) return void stats.errors.push(`token ${name}: "${String(raw)}" is not a number`);
       } else return; // fontFamily etc.: no Figma variable binding needed for these
       let v = existing.get(name);
       if (!v) {
@@ -353,9 +359,34 @@ export function putImages(p: { images: Record<string, string> }) {
   }
   return { images: imageHashes.size };
 }
-/** Of these pictures, the ones this file doesn't have yet (the panel downloads only those). */
-export function missingImages(p: { refs: string[] }) {
-  return { refs: p.refs.filter((r) => !imageHash(r)) };
+/**
+ * Of these pictures, the ones this file doesn't have (the panel downloads only those). A picture the file
+ * remembers but Figma no longer has counts as missing: one no layer used (an update that stopped before its
+ * pages) is dropped by Figma, and filling a screenshot with it left it blank ("invalid image … removed", every
+ * time) while the file said it had the picture, so it was never downloaded again. Reading its bytes is the
+ * check: getImageByHash alone still answered for a dropped one.
+ */
+export async function missingImages(p: { refs: string[] }) {
+  const refs: string[] = [];
+  for (const r of p.refs) {
+    const h = imageHash(r);
+    const alive = h
+      ? await figma
+          .getImageByHash(h)
+          ?.getBytesAsync()
+          .then(
+            (b) => b.length > 0,
+            () => false,
+          )
+      : false;
+    if (alive) continue;
+    if (h) {
+      imageHashes.delete(r);
+      figma.root.setSharedPluginData(NS, IMG + r, "");
+    }
+    refs.push(r);
+  }
+  return { refs };
 }
 function imageHash(ref: string): string | undefined {
   if (!imageHashes.has(ref)) {
@@ -886,7 +917,10 @@ async function reconcileInstance(node: InstanceNode, spec: SpecNode, index: Map<
         continue;
       }
       if (t.characters !== o.characters) {
-        await figma.loadFontAsync(t.fontName as FontName);
+        // Text with mixed styles ("▲ 8.2% vs last month", the last words lighter) has fontName figma.mixed:
+        // load every font in it, or loadFontAsync throws ("Cannot unwrap symbol") and the page isn't built.
+        const fonts = t.characters.length ? t.getRangeAllFontNames(0, t.characters.length) : t.fontName === figma.mixed ? [] : [t.fontName];
+        await Promise.all(fonts.map((f) => figma.loadFontAsync(f)));
         t.characters = o.characters;
         wrote(stats, "override.characters");
       }
@@ -1065,7 +1099,14 @@ async function reconcileChildren(parent: SceneNode & ChildrenMixin, specs: SpecN
     if (!node) node = await create(s, index, stats);
     if (node.parent !== parent || parent.children.indexOf(node) !== i) {
       const wasHere = node.parent === parent;
-      parent.insertChild(i, node);
+      // Never past the end: a layer that left an earlier place here (another spec child took it) would make
+      // Figma throw and stop the whole update. Placed last instead, and reported with where it happened.
+      const at = Math.min(i, parent.children.length - (wasHere ? 1 : 0));
+      if (at !== i)
+        stats.errors.push(
+          `${s.k}: placed at ${at} instead of ${i} in ${keyOf(parent) || parent.name} (${parent.children.length} layers; ${wasHere ? "already here" : `came from ${node.parent ? keyOf(node.parent as SceneNode) || node.parent.name : "nowhere"}`})`,
+        );
+      parent.insertChild(at, node);
       if (wasHere) stats.moved++;
     }
     await reconcileNode(node, s, index, stats);
@@ -2040,7 +2081,10 @@ export async function placeShot(p: { k: string; ref: string; w: number; h: numbe
   if (!hash) throw new Error("its picture didn't reach this file");
   const shots = await sections.liveShots();
   let shot = shotOf(shots, p.k);
-  if (shot && shot.getSharedPluginData(NS, SHOT.ref) === p.ref && shot.name === shotName(page)) {
+  // Unchanged only when its fill really is that picture: a frame whose image Figma dropped kept the same ref and
+  // stayed blank on every update after.
+  const filled = (shot?.fills as readonly Paint[] | undefined)?.some((f) => f.type === "IMAGE" && f.imageHash === hash);
+  if (shot && filled && shot.getSharedPluginData(NS, SHOT.ref) === p.ref && shot.name === shotName(page)) {
     // Unchanged, but screenshots left among the pages by plugin 0.1 still go (stack removes them).
     if (screens.children.some(isShot)) stack(screens);
     return { placed: true };

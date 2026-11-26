@@ -52,6 +52,9 @@ const LOOP = [
 ];
 
 /** The demo video: the developer ships, the designer fixes the look, the code follows. Loaded only when played. */
+/** The ticker under the hero: the Day to day titles (the same words as further down, so it's decorative). */
+const TICKER = ["Live follows the code", "Designs go to the code", "Nothing gets lost", "Everyone knows who's on what", "Branch previews", "Your components, linked"];
+
 const PREVIEW = `<div class="lp-product">
   <video controls playsinline preload="none" poster="/demo-poster.jpg" aria-label="CoDesignFlo demo: a developer ships a badge, the designer fixes its colour in Figma, and the code follows">
     <source src="/demo.mp4" type="video/mp4">
@@ -102,6 +105,10 @@ export function landingHtml(c: LandingConfig): string {
       ${PREVIEW}
     </div>
   </section>
+
+  <div class="lp-marquee" aria-hidden="true"><div class="lp-marquee-track">${[0, 1]
+    .map(() => TICKER.map((t) => `<span>${t}</span><b>✦</b>`).join(""))
+    .join("")}</div></div>
 
   <section id="about" class="lp-section lp-paper">
     <div class="lp-container">
