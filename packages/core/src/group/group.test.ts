@@ -27,7 +27,7 @@ describe("group (golden: spike S6, real Figma proposal on the Live ProductCard)"
       variants: unknown;
       items?: string[];
     };
-    const withoutItems = (c: Expected) => ({ ...c, items: undefined });
+    const withoutItems = (c: Expected) => ({ ...c, items: undefined, design: undefined });
     expect(changes.map(withoutItems)).toEqual(fixture<Expected[]>("s6/changes.json").map(withoutItems));
     expect(changes.every((c) => c.items.length === 3)).toBe(true);
   });
@@ -81,5 +81,105 @@ describe("designer variables that aren't project tokens", () => {
       fills: [{ boundVariables: { color: "var(Tokens/color/accents/red)" } }],
       other: "var(Colors/Accents/Blue)",
     });
+  });
+});
+
+describe("colours with their opacity", () => {
+  it("a fill at 14% of a variable, and a navy at 40%, say so (not the solid colour)", () => {
+    const paint = (color: { r: number; g: number; b: number }, opacity: number, bound?: string) => ({
+      type: "SOLID",
+      color,
+      opacity,
+      visible: true,
+      ...(bound ? { boundVariables: { color: bound } } : {}),
+    });
+    const item = {
+      id: "i1",
+      kind: "token",
+      op: "change",
+      target: "V[a=1]|c/a=1/price",
+      path: "",
+      prop: "fills",
+      from: [paint({ r: 0.0431, g: 0.0627, b: 0.1255 }, 0.4)],
+      to: [paint({ r: 1, g: 0.2196, b: 0.2353 }, 0.14, "var(Tokens/color/brand/red)")],
+      match: "key",
+    } as never;
+    const [c] = group([item], {}, ["a=1"]);
+    expect(c?.from).toBe("#0b1020 at 40% opacity");
+    expect(c?.to).toBe("var(--color-brand-red) at 14% opacity");
+  });
+});
+
+describe("nothing lost between the design and the developer", () => {
+  const paint = (r: number, g: number, b: number, opacity: number, bound?: string) => ({
+    type: "SOLID",
+    color: { r, g, b },
+    opacity,
+    visible: true,
+    ...(bound ? { boundVariables: { color: bound } } : {}),
+  });
+  const pill = (fill: unknown) => ({
+    name: "c",
+    type: "COMPONENT_SET",
+    ds: { k: "c" },
+    children: [
+      {
+        name: "a=1",
+        type: "COMPONENT",
+        ds: { k: "c/a=1" },
+        variantProperties: { a: "1" },
+        children: [{ name: "price", type: "FRAME", ds: { k: "c/a=1/price" }, fills: [fill], cornerRadius: 999, strokes: [], children: [] }],
+      },
+    ],
+  });
+  const base = pill(paint(0.0431, 0.0627, 0.1255, 0.4)) as never;
+  const design = pill(paint(1, 0.2196, 0.2353, 0.14, "var(Tokens/color/brand/red)")) as never;
+
+  it("each change carries the design's value whole, and its layer's other properties", async () => {
+    const { describeChange } = await import("../apply/instructions.js");
+    const { layerContext } = await import("./group.js");
+    const [c] = group(diff(base, design), {}, ["a=1"]);
+    const line = describeChange(c!);
+    expect(line).toContain("var(--color-brand-red) at 14% opacity");
+    expect(line).toContain("as designed, exactly:");
+    expect(line).toContain('"opacity":0.14');
+    expect(line).toContain('"color":"var(Tokens/color/brand/red)"');
+    // On a real Figma snapshot: each changed layer found, with its own properties and without its layers.
+    const s6Base = fixture<Raw>("s6/base.json");
+    const s6Design = fixture<Raw>("s6/proposal.json");
+    const layers = [...new Set(group(diff(s6Base, s6Design), {}, ["x"]).map((x) => x.layer))].filter((l) => l !== "(root)");
+    const ctx = layerContext(s6Design, layers);
+    expect(Object.keys(ctx).sort()).toEqual(layers.filter((l) => !l.includes(" > ")).sort());
+    for (const props of Object.values(ctx)) {
+      expect(props).not.toHaveProperty("children");
+      expect(props).toHaveProperty("type");
+    }
+  });
+
+  it("where the code drew something else, the check says what and what the design wants", async () => {
+    const { merge } = await import("../merge/merge.js");
+    const { conflictsOf } = await import("./group.js");
+    // The code went to the token, solid: not the 14% tint.
+    const code = pill(paint(1, 0.2196, 0.2353, 1, "var(Tokens/color/brand/red)")) as never;
+    expect(conflictsOf(merge(base, design, code))).toMatchObject([
+      { prop: "fills", design: "var(--color-brand-red) at 14% opacity", code: "var(--color-brand-red)" },
+    ]);
+  });
+});
+
+describe("a page's changes", () => {
+  it("apply to the page (no 'ONLY when' with nothing after it: a page has no versions)", () => {
+    const item = {
+      id: "i1",
+      kind: "style",
+      op: "change",
+      target: "screen:pages.p/content/price",
+      path: "",
+      prop: "opacity",
+      from: 1,
+      to: 0.5,
+      match: "key",
+    } as never;
+    expect(group([item], {}, [])[0]?.variants).toBe("all");
   });
 });

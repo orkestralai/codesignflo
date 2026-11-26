@@ -93,8 +93,28 @@ export function extractInPage(): IRNode {
 
   const round = (n: number) => Math.round(n * 100) / 100;
   const px = (v: string) => (v === "normal" || v === "" ? 0 : parseFloat(v) || 0);
+  /** Colours CSS gives in other forms (color-mix → color(srgb …), oklch, lab…), as rgba, through a 1-px canvas. */
+  let swatch: CanvasRenderingContext2D | null = null;
+  const viaCanvas = (c: string): string | undefined => {
+    if (!c || c === "none" || c === "transparent" || !/\(/.test(c)) return undefined;
+    // sRGB as color(srgb r g b / a), read exactly (a canvas rounds a faint tint's colour).
+    const srgb = /^color\(srgb\s+([\d.e-]+)\s+([\d.e-]+)\s+([\d.e-]+)(?:\s*\/\s*([\d.e-]+%?))?\)$/.exec(c.trim());
+    if (srgb) {
+      const ch = (v: string) => Math.max(0, Math.min(255, parseFloat(v) * 255));
+      const alpha = srgb[4] ? (srgb[4].endsWith("%") ? parseFloat(srgb[4]) / 100 : parseFloat(srgb[4])) : 1;
+      return `rgba(${ch(srgb[1]!)}, ${ch(srgb[2]!)}, ${ch(srgb[3]!)}, ${alpha})`;
+    }
+    swatch ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    if (!swatch) return undefined;
+    swatch.clearRect(0, 0, 1, 1);
+    swatch.fillStyle = "#000";
+    swatch.fillStyle = c;
+    swatch.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = swatch.getImageData(0, 0, 1, 1).data;
+    return `rgba(${r}, ${g}, ${b}, ${Math.round((a! / 255) * 1000) / 1000})`;
+  };
   const hex = (c: string): string | undefined => {
-    const m = /rgba?\(([^)]+)\)/.exec(c);
+    const m = /rgba?\(([^)]+)\)/.exec(c) ?? /rgba?\(([^)]+)\)/.exec(viaCanvas(c) ?? "");
     if (!m) return undefined;
     const [r, g, b, a = "1"] = m[1]!.split(/[,\s/]+/).filter(Boolean);
     if (parseFloat(a) === 0) return undefined;
@@ -558,7 +578,22 @@ export function extractInPage(): IRNode {
       ...(cs.fontStyle === "italic" || cs.fontStyle.startsWith("oblique") ? { italic: true as const } : {}),
       ...decorationOf(el),
       ...(linkOf(el) ? { link: linkOf(el) } : {}),
+      ...gradientTextOf(el, cs),
     };
+  };
+  /** Clipped to the text (background-clip: text): its background shows through the letters only. */
+  const clipsToText = (c: CSSStyleDeclaration) => c.backgroundClip === "text" || c.getPropertyValue("-webkit-background-clip") === "text";
+  /**
+   * Gradient-coloured text (a price in amber to pink): its gradient, as the text's fill. Live drew it as a gradient
+   * box with black text (the text itself is transparent).
+   */
+  const gradientTextOf = (el: Element, c: CSSStyleDeclaration): { gradient?: NonNullable<IRNode["gradient"]> } => {
+    if (!clipsToText(c)) return {};
+    const g = linearGradient(
+      c.backgroundImage,
+      declared(el as HTMLElement, "background") || declared(el as HTMLElement, "background-image"),
+    );
+    return g ? { gradient: g } : {};
   };
   /**
    * Where an element's text links to: the <a href> it's in, when the href is absolute (http/https, mailto:, tel:).
@@ -1347,7 +1382,7 @@ export function extractInPage(): IRNode {
     // read as bare text, Live drew "SJ" with no circle).
     const hasBox =
       !!hex(cs.backgroundColor) ||
-      cs.backgroundImage !== "none" ||
+      (cs.backgroundImage !== "none" && !clipsToText(cs)) ||
       cs.boxShadow !== "none" ||
       [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth, cs.borderLeftWidth].some((w) => px(w) > 0) ||
       [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].some((w) => px(w) > 0);
@@ -1438,7 +1473,14 @@ export function extractInPage(): IRNode {
         // One column: a stack, as Figma's grid would share the grid's height between its rows (a scrolling list
         // of 78px rows drawn 62px apart, overlapping, one row more showing than in the browser).
         const { columns: _c, columnSizes: _s, rows: _r, rowGap, gap, ...rest } = node.layout;
-        node.layout = { ...rest, direction: "VERTICAL", gap: rowGap ?? gap, align: "STRETCH" };
+        // Where its items sit in their cells: across by justify-items, down by align-items when the one item has
+        // the grid to itself (place-items: center centres a badge's number; Live put it at the top), else by
+        // align-content.
+        const place = (v: string): "MIN" | "CENTER" | "MAX" | null =>
+          /center/.test(v) ? "CENTER" : /end|right/.test(v) ? "MAX" : /start|left/.test(v) ? "MIN" : null;
+        const across = place(cs.justifyItems) ?? "STRETCH";
+        const down = (cells.length === 1 ? place(cs.alignItems) : null) ?? place(cs.alignContent) ?? "MIN";
+        node.layout = { ...rest, direction: "VERTICAL", gap: rowGap ?? gap, align: across, justify: down };
       }
     } else
       node.layout = {
@@ -1464,7 +1506,8 @@ export function extractInPage(): IRNode {
     const bg = hex(cs.backgroundColor);
     if (bg) node.fill = tok(bg, tokenIn(declared(el, "background")) ?? tokenIn(declared(el, "background-color")));
     // One linear gradient stays a gradient (editable in Figma); pictures, other gradients and stacks are drawn.
-    const bgi = cs.backgroundImage;
+    // Clipped to its text: the background colours the letters (see gradientTextOf), it isn't a box behind them.
+    const bgi = clipsToText(cs) ? "none" : cs.backgroundImage;
     const layered = bgi !== "none" && (/url\(|radial-gradient|conic-gradient|repeating-/.test(bgi) || splitTop(bgi).length > 1);
     const painted = layered ? paintBackground(cs, base.width, base.height) : undefined;
     if (painted) node.background = { png: painted };
@@ -1664,6 +1707,21 @@ export function extractInPage(): IRNode {
           at: place(runBox),
         });
       }
+    }
+    // Children that overlap by a negative margin, all by the same amount (a stack of avatars, * + * { margin-left:
+    // -10px }): Figma's auto layout takes a negative gap. Live left the margins out and drew them apart.
+    if (spacing && node.layout && !node.layout.wrap && !para) {
+      const inFlow = elementKids.filter((k) => !/absolute|fixed/.test(getComputedStyle(k).position));
+      const [s0, s1] = vertical ? ["top", "bottom"] : ["left", "right"];
+      const overlaps = inFlow
+        .slice(1)
+        .map(
+          (k, i) =>
+            Math.min(0, px(getComputedStyle(k).getPropertyValue(`margin-${s0}`))) +
+            Math.min(0, px(getComputedStyle(inFlow[i]!).getPropertyValue(`margin-${s1}`))),
+        );
+      if (overlaps.length && overlaps.every((o) => o < 0 && Math.abs(o - overlaps[0]!) < 0.5))
+        node.layout.gap = tok(round(node.layout.gap.value + overlaps[0]!));
     }
     // What CSS draws with ::before / ::after (an active tab's underline, a dot, a divider, a badge, a quote mark):
     // layers of their own, placed where they're drawn (Live had no underline under the selected tab).

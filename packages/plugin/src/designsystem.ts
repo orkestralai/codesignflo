@@ -3,6 +3,7 @@
 // match it to one of theirs, or ignore it. A link is the code component's key, stored on the Library
 // component (on its instance, for a team library's component: the component itself is read-only here). Live
 // pages draw linked components with the designer's (executor), and each pair lists where it differs.
+
 import {
   compareComponents,
   LAYOUT,
@@ -17,6 +18,7 @@ import {
   type VariantLook,
 } from "@codesignflo/core";
 import { LABEL, sectionIfAny, sections, stack } from "./facts.js";
+import { editable } from "./guard.js";
 
 export const DS = {
   /** On a Library component: { k, map, at } — the code component it is linked to. */
@@ -208,7 +210,7 @@ export async function refresh(): Promise<{ notes: string[] }> {
     if (have && !have.removed && have.getSharedPluginData(NS, DS.gen) === genOf(set)) continue;
     const copy = set.clone();
     strip(copy);
-    copy.locked = false;
+    editable(copy);
     from.appendChild(copy);
     if (have && !have.removed) {
       copy.x = have.x;

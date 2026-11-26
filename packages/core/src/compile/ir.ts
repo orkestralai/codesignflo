@@ -79,6 +79,8 @@ export type IRNode = {
     italic?: true;
     /** The whole text underlined or struck through (text-decoration-line). */
     decoration?: "UNDERLINE" | "STRIKETHROUGH";
+    /** Gradient-coloured text (background-clip: text over a linear gradient): the text's fill, not a box behind it. */
+    gradient?: { angle: number; stops: { color: Tokened<string>; position: number }[] };
     /** Where the text links to (an <a href> around it): a URL, mailto: or tel:, kept as a link in Figma. */
     link?: string;
     /**

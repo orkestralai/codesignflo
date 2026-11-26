@@ -104,9 +104,12 @@ export type MainToUi =
   | { kind: "cloudEvents"; events: unknown[] }
   /** A proposal sent to the developer: the panel uploads it to the service. */
   | { kind: "cloudProposal"; component: string; claim: string; payload: unknown }
-  | { kind: "selection"; component?: string }
+  /** What the canvas selection is for claiming: a component or page (from: a branch lane's item), or why not. */
+  | { kind: "selection"; component?: string; from?: string; branch?: string; why?: string }
   /** Something changed on the page in view (the designer editing): the panel looks again if a copy is open. */
   | { kind: "edited" }
-  | { kind: "reloadUi"; html: string };
+  | { kind: "reloadUi"; html: string }
+  /** The designer changed Live or a lane item (it's the code's): what the panel says. */
+  | { kind: "liveEdited"; names: string[]; inside: boolean };
 
 export type { PanelState };

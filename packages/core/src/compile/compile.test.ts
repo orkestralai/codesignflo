@@ -489,3 +489,31 @@ describe("colours bound to tokens only when the browser drew the token's colour"
     expect(spec.paintBind?.fills).toBeUndefined();
   });
 });
+
+describe("a token's colour at a lower opacity", () => {
+  it("is bound to the token, the paint keeping its opacity", async () => {
+    const { compileScreens, tokenColours } = await import("./compile.js");
+    const dtcg = { color: { red: { $value: "#ff383c", $type: "color" } } };
+    const zero = { value: 0 };
+    const root = {
+      type: "FRAME",
+      name: "page",
+      width: 100,
+      height: 40,
+      sizing: { w: "fixed", h: "fixed" },
+      layout: { direction: "VERTICAL", gap: zero, padding: [zero, zero, zero, zero], align: "MIN", justify: "MIN" },
+      fill: { value: "#ff383c24", token: "color-red" },
+      children: [],
+    };
+    const irs = new Map([["page--default", { story: "page--default", root }]]) as never;
+    const [screen] = compileScreens(
+      { components: {}, screens: { "pages.page": { story: "page--default" } } } as never,
+      irs,
+      tokenNames(dtcg),
+      tokenColours(dtcg),
+    );
+    const spec = (screen as unknown as { spec: { paintBind?: Record<string, string>; props: Record<string, unknown> } }).spec;
+    expect(spec.paintBind?.fills).toBe("color/red");
+    expect(spec.props.fills).toEqual(["#ff383c24"]);
+  });
+});

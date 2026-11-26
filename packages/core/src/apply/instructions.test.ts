@@ -29,3 +29,35 @@ describe("designer text reaches the agent as quoted data", () => {
     expect(designerText("x".repeat(5000)).length).toBeLessThan(2100);
   });
 });
+
+describe("what the developer is told about a design", () => {
+  it("names what the code drew differently at the last sync, and gives the changed layers whole", async () => {
+    const { proposalInstructions } = await import("./instructions.js");
+    const text = proposalInstructions({
+      component: "components.trip-card",
+      by: "Ana",
+      changes: [
+        {
+          id: "C1",
+          layer: "card/price",
+          prop: "fills",
+          kind: "token",
+          from: "#0b1020 at 40% opacity",
+          to: "var(--color-red) at 14% opacity",
+          variants: "all",
+          items: ["i1"],
+        },
+      ],
+      content: [],
+      page: false,
+      layers: { "card/price": { type: "FRAME", cornerRadius: 999, strokes: [{ type: "SOLID" }] } },
+      notAsDesigned: {
+        at: "main @3322b41",
+        rows: [{ layer: "card/price", prop: "fills", code: "var(--color-red)", design: "var(--color-red) at 14% opacity" }],
+      },
+    });
+    expect(text).toContain("Not as designed yet — the check after the last sync (main @3322b41)");
+    expect(text).toContain("layer `card/price` — fills: the code draws var(--color-red); the design wants var(--color-red) at 14% opacity");
+    expect(text).toContain('- `card/price`: {"type":"FRAME","cornerRadius":999');
+  });
+});

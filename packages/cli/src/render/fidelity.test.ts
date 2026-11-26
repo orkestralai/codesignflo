@@ -531,3 +531,45 @@ describe("a text in a box drawn only by a gradient or a shadow", () => {
     expect(avatar.children?.[0]?.text?.characters).toBe("SJ");
   });
 });
+
+describe("overlaps and grid placement", () => {
+  it("children overlapping by the same negative margin get a negative gap", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<style>.people > * + * { margin-left: -10px }</style>
+      <div data-cdf="People" class="people" style="display:flex">${'<span style="width:40px;height:40px;border-radius:50%;background:#888"></span>'.repeat(3)}</div>`);
+    const people = find(root, (x) => x.name === "People")!;
+    expect(people.layout?.gap.value).toBe(-10);
+  });
+  it("one item in a grid with place-items: center is centred both ways", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(
+      `<div data-cdf="Gauge" style="display:grid;place-items:center;width:56px;height:56px;background:#333"><span data-cdf="Inner" style="width:44px;height:44px;background:#111"></span></div>`,
+    );
+    const gauge = find(root, (x) => x.name === "Gauge")!;
+    expect(gauge.layout).toMatchObject({ direction: "VERTICAL", align: "CENTER", justify: "CENTER" });
+  });
+});
+
+describe("a token's colour mixed to a tint", () => {
+  it("color-mix(var(--x) 14%, transparent) reads as the token's colour at 14%, with the token", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(
+      `<style>:root{--color-red:#ff383c}</style><span data-cdf="Pill" style="display:inline-block;width:60px;height:20px;background:color-mix(in srgb, var(--color-red) 14%, transparent)"></span>`,
+    );
+    const pill = find(root, (x) => x.name === "Pill")!;
+    expect(pill.fill).toEqual({ value: "#ff383c24", token: "color-red" });
+  });
+});
+
+describe("gradient-coloured text", () => {
+  it("is a text with the gradient as its fill, not a gradient box with black text", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(
+      `<span data-cdf="Now" style="font:800 26px/32px sans-serif;background:linear-gradient(90deg,#fbbf24,#ff5ca8);-webkit-background-clip:text;background-clip:text;color:transparent">€1,240</span>`,
+    );
+    const now = find(root, (x) => x.name === "Now")!;
+    expect(now.type).toBe("TEXT");
+    expect(now.text?.gradient?.stops.map((s) => s.color.value)).toEqual(["#fbbf24", "#ff5ca8"]);
+    expect(now.gradient).toBeUndefined();
+  });
+});

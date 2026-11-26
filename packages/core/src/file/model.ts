@@ -88,6 +88,8 @@ export const ClaimRecordSchema = z.object({
   at: z.string(),
   /** Generation the copy was made from (the merge base). */
   baselineGen: z.string(),
+  /** Claimed from this branch's lane (not in Live yet): the design is of that branch's version. */
+  branch: z.optional(z.string()),
   note: z.optional(z.string()),
   readyHash: z.optional(z.string()),
   /** New design only: the component's name as the designer typed it (the code name derives from it). */

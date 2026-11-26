@@ -1,7 +1,7 @@
 // What the developer's coding agent is told: a proposal as implementation instructions, the status line,
 // and the events for its answers (a question, settling a clash). Shared by the local MCP/CLI and the hosted
 // MCP, so both say exactly the same.
-import type { Change } from "../group/group.js";
+import type { Change, NotAsDesigned } from "../group/group.js";
 import type { LedgerEvent } from "../ledger/events.js";
 import type { ComponentState } from "../ledger/state.js";
 import { type SystemUse, usesLines } from "../system/system.js";
@@ -34,7 +34,11 @@ export function describeChange(c: Change): string {
   const foreign = c.foreign?.length
     ? ` — NOTE: ${c.foreign.map((f) => `Figma variable "${f.variable}" (${f.value})`).join(", ")} is not a project token yet. The designer decided: add it to the project's tokens file as \`${c.foreign.map((f) => f.token.replace(/\//g, ".")).join("`, `")}\` (DTCG \`$value\` = the value given), then use its CSS variable (\`${c.foreign.map((f) => `var(--${f.token.replace(/\//g, "-")})`).join("`, `")}\`). Do not substitute an existing token.`
     : "";
-  return `- ${c.id} [${c.kind}] ${where} — ${c.prop}: ${c.from} → ${c.to} ${scope}${foreign}`;
+  // The whole designed value too, when the wording is a summary of it (a paint, an effect, a font).
+  const json = c.design !== undefined ? JSON.stringify(c.design) : "";
+  const exact =
+    json && json !== JSON.stringify(c.to) ? ` — as designed, exactly: ${json.length > 700 ? `${json.slice(0, 700)}…` : json}` : "";
+  return `- ${c.id} [${c.kind}] ${where} — ${c.prop}: ${c.from} → ${c.to} ${scope}${exact}${foreign}`;
 }
 
 /** Where a component or page lives in the code, from the registry sync writes. */
@@ -51,6 +55,10 @@ export function proposalInstructions(p: {
   page: boolean;
   /** Components from the designer's design system the copy places (linked to code components). */
   uses?: SystemUse[];
+  /** The changed layers as designed, with all their own properties (see layerContext). */
+  layers?: Record<string, Record<string, unknown>>;
+  /** Where the code, at the last sync, drew something else than the design (the check's conflicts). */
+  notAsDesigned?: { at: string; rows: NotAsDesigned[] };
 }): string {
   const files = p.entry?.files ?? [];
   const stories = p.entry?.stories
@@ -69,7 +77,27 @@ export function proposalInstructions(p: {
 ${p.conflict ? "\nNOTE: some changes clash with code changed since the designer claimed it — call resolve first (take=design unless there's a functional reason).\n" : ""}
 Changes (implement each exactly once):
 ${p.changes.map(describeChange).join("\n")}
-${p.content.length ? `\nExample text the designer changed (no code change): ${p.content.map((c) => `${c.layer}: ${designerText(c.to, 300)}`).join("; ")}\n` : ""}${p.uses?.length ? `\n${usesLines(p.uses).join("\n")}\n` : ""}
+${
+  p.notAsDesigned?.rows.length
+    ? `\nNot as designed yet — the check after the last sync (${p.notAsDesigned.at}) found the code drawing something else for:\n${p.notAsDesigned.rows
+        .map(
+          (r) =>
+            `- ${r.layer === "(root)" ? "the component's root element" : `layer \`${r.layer}\``} — ${r.prop}: the code draws ${r.code}; the design wants ${r.design}`,
+        )
+        .join("\n")}\nFix these in the code (or, if the code is right, ask the user to settle it with resolve --code and say why).\n`
+    : ""
+}${
+  p.layers && Object.keys(p.layers).length
+    ? `\nThe changed layers as designed, all their properties (context: implement the changes above, not every property here):\n${Object.entries(
+        p.layers,
+      )
+        .map(([l, props]) => {
+          const json = JSON.stringify(props);
+          return `- \`${l}\`: ${json.length > 1500 ? `${json.slice(0, 1500)}…` : json}`;
+        })
+        .join("\n")}\n`
+    : ""
+}${p.content.length ? `\nExample text the designer changed (no code change): ${p.content.map((c) => `${c.layer}: ${designerText(c.to, 300)}`).join("; ")}\n` : ""}${p.uses?.length ? `\n${usesLines(p.uses).join("\n")}\n` : ""}
 Where: ${files.join(", ") || "(see the registry)"}${p.page ? " (a page: changes inside a component used on the page change the page's use of it; if the component itself must change, ask_designer)" : ""}.
 How the design maps to the code: layer \`body/price\` is the element with class styles.price (or data-cdf="price") inside styles.body; "a > b" is layer b inside the nested component a; \`<layer>-margin\` is a CSS margin; tokens are CSS custom properties, use them as given.${stories ? ` Versions: ${stories}; "ONLY when …" is a condition on those props.` : ""}
 

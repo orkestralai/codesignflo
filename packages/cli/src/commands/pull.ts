@@ -5,9 +5,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   adoptForeignVariables,
+  conflictsOf,
   deltaFor,
   fold,
   markPresentation,
+  type NotAsDesigned,
   predictLive,
   type Raw,
   type SpecNode,
@@ -34,6 +36,8 @@ export type ProposalCheck = {
   done: number;
   total: number;
   conflicts: number;
+  /** Which layers and properties conflict: what the code draws and what the design wants. */
+  conflicting: NotAsDesigned[];
   /** false: the code adds or removes layers here, which only Live can confirm. */
   exact: boolean;
 };
@@ -68,7 +72,8 @@ export async function proposalChecks(specs?: Map<string, SpecNode>): Promise<{ l
     }
     if (st.state !== "ready_for_dev" || !row.payload.copy) continue;
     const claimed = row.payload.base ?? (st.claim.baselineGen ? await loadGeneration(row.component, st.claim.baselineGen) : null);
-    const live = (st.lastGen ? await loadGeneration(row.component, st.lastGen) : null) ?? claimed;
+    // Claimed from a branch's lane: that branch's version is what it was designed on (not Live's).
+    const live = st.claim.branch ? claimed : ((st.lastGen ? await loadGeneration(row.component, st.lastGen) : null) ?? claimed);
     if (!claimed || !live) continue;
     const spec = specs?.get(row.component);
     const predicted = spec ? predictLive(live, spec) : null;
@@ -91,6 +96,7 @@ export async function proposalChecks(specs?: Map<string, SpecNode>): Promise<{ l
       done: m.summary.convergent,
       total: m.summary.convergent + left + conflicts,
       conflicts,
+      conflicting: designWins ? [] : conflictsOf(m),
       exact: predicted?.exact ?? true,
     });
     lines.push(`${row.component}: ${changes.length} change(s) to implement`);

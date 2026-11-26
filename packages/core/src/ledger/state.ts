@@ -17,6 +17,8 @@ export type ComponentState = {
     id: string;
     by: string;
     baselineGen: string;
+    /** Claimed from this branch's lane: its version, not Live's, is what the design changes (build it there). */
+    branch?: string;
     note?: string;
     readyHash?: string;
     delivered?: string;
@@ -102,7 +104,7 @@ export function step(s: ComponentState, e: LedgerEvent): ComponentState {
         break;
       case "claimed":
         if (s.state === "in_sync" || s.state === "code_new" || s.state === "ignored") {
-          s.claim = { id: e.claim, by: e.by, baselineGen: e.baselineGen };
+          s.claim = { id: e.claim, by: e.by, baselineGen: e.baselineGen, ...(e.branch ? { branch: e.branch } : {}) };
           s.unseen = false;
           go("in_design");
         } else reject("already claimed");

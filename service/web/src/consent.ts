@@ -75,11 +75,42 @@ function loadCounter() {
   document.head.append(s);
 }
 
-/** The page tells which view it shows; the counter loads on the landing page only and goes before any other. */
+/**
+ * The chat assistant on the landing page (OrkestralAI's embed, answering questions about CoDesignFlo). Someone
+ * else's script like the counter, so the same rules: the public landing page only, for someone not signed in, never
+ * with a sign-in link open; a session appearing reloads the page without it. Not pinned by integrity: the embed
+ * changes with the bot. Needs no consent: it sets no cookies, and is there to be asked.
+ */
+const CHATBOT: Record<string, string> = {
+  src: "https://www.orkestralai.com/embed.js",
+  botId: "d98c4258-5545-4e2c-b0d0-108d62540886",
+  primaryColor: "#1F63CC",
+  secondaryColor: "#F8FAFC",
+  fontFamily: "modern",
+  position: "bottom-right",
+  cornerStyle: "round",
+  width: "380",
+  height: "560",
+};
+let chatbot = false;
+function loadChatbot() {
+  if (chatbot || view !== "landing" || signedIn() || signInLink()) return;
+  chatbot = true;
+  const s = document.createElement("script");
+  s.src = CHATBOT.src!;
+  s.async = true;
+  s.referrerPolicy = "origin";
+  for (const [k, v] of Object.entries(CHATBOT)) if (k !== "src") s.dataset[k] = v;
+  document.body.append(s);
+}
+
+/** The page tells which view it shows; the counter and the chat load on the landing page only. */
 export function counterView(v: CounterView) {
   view = v;
-  if (v === "landing") loadCounter();
-  else if (v === "private" && loaded) location.reload();
+  if (v === "landing") {
+    loadCounter();
+    loadChatbot();
+  } else if (v === "private" && (loaded || chatbot)) location.reload();
 }
 
 function banner(): HTMLElement {

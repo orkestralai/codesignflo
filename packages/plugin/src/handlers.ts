@@ -1,9 +1,11 @@
 // Methods the developer's CLI calls over the bridge. Nothing here runs unless the CLI is connected.
+
 import { type ClaimRecord, NODE, NS } from "@codesignflo/core";
 import * as ds from "./designsystem.js";
 import * as executor from "./executor.js";
 import * as facts from "./facts.js";
 import { ackEvents, events, init, meta, proposals, writeClaim, writeIndex } from "./facts.js";
+import { editable } from "./guard.js";
 import * as panel from "./panel.js";
 import { applyOps } from "./rebase.js";
 import * as reconcile from "./reconcile.js";
@@ -67,6 +69,19 @@ export const handlers: Record<string, Handler> = {
   /** A developer's sync telling the panel how far its update is (the panel shows it; nothing to do here). */
   updateProgress: async () => null,
   exportNode: (p: { k?: string; id?: string; width?: number }) => executor.exportNode(p),
+  /** The version a designer's copy was claimed from, as kept on it (a branch claim's base: no Live generation). */
+  proposalBase: async (p: { id: string }) => {
+    const n = await figma.getNodeByIdAsync(p.id);
+    return n ? (facts.readBase(n) ?? null) : null;
+  },
+  /** How far a design is on a branch (checked against the lane's layers): kept on the copy for its row and label. */
+  laneCheck: async (p: { id: string; branch: string; done: number; total: number; conflicts: number; commit: string }) => {
+    const n = await figma.getNodeByIdAsync(p.id);
+    if (!n) return { kept: false };
+    const { id: _id, ...check } = p;
+    n.setSharedPluginData(NS, facts.LANE_CHECK, JSON.stringify({ ...check, at: new Date().toISOString() }));
+    return { kept: true };
+  },
   applyOps: (p: Parameters<typeof applyOps>[0]) => applyOps(p),
   readFacts: async () => ({
     meta: meta(),
@@ -95,7 +110,7 @@ export const handlers: Record<string, Handler> = {
   cloneToProposals: async (p: { id: string; claim: unknown; base?: unknown }) => {
     const src = await nodeFor({ id: p.id });
     const copy = (src as ComponentSetNode).clone();
-    copy.locked = false;
+    editable(copy);
     if (p.base) facts.writeBase(copy, p.base);
     const claim = p.claim as ClaimRecord;
     (await facts.designerLane(facts.designerOf(claim))).appendChild(copy);

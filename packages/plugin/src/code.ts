@@ -1,9 +1,11 @@
 // codesignflo plugin — main thread. Routes panel actions (designer) and bridge requests (developer's CLI).
 import type { PropMap } from "@codesignflo/core";
 import type * as protocol from "@codesignflo/core/protocol";
+import { bannerClosed, bannerKeepHidden, bannerOpen } from "./banner.js";
 import * as ds from "./designsystem.js";
 import { demoShotsFromLive, onProgress } from "./executor.js";
-import { clearFile, fileContents, forgetProject, init, meta, migrateLegacy, resetDemoFile } from "./facts.js";
+import { clearFile, fileContents, forgetProject, init, meta, migrateLegacy, resetDemoFile, stack } from "./facts.js";
+import { asPlugin, guardChanges } from "./guard.js";
 import { handlers } from "./handlers.js";
 import type { GuidePrefs, MainToUi, UiToMain } from "./messages.js";
 import * as panel from "./panel.js";
@@ -25,6 +27,14 @@ const post = (m: MainToUi) => figma.ui.postMessage(m);
 // A file set up before the rename moves its data to the new namespace before anything reads it.
 const migrated = migrateLegacy().catch(() => 0);
 
+// The "plugin is closed" banner on the Live page: hidden while the plugin runs, shown again when it closes.
+void migrated.then(() => (meta() ? asPlugin(bannerOpen) : undefined)).catch(() => undefined);
+const bannerTimer = setInterval(() => void asPlugin(async () => bannerKeepHidden()), 10_000);
+figma.on("close", () => {
+  clearInterval(bannerTimer);
+  bannerClosed();
+});
+
 /** Requests that change what the panel shows; after them the panel refreshes. */
 const CHANGES = new Set(["init", "writeIndex", "ackEvents", "reconcile", "cloneToProposals", "archiveProposal"]);
 
@@ -37,7 +47,8 @@ async function timed<T>(what: string, f: () => Promise<T>): Promise<T> {
   log.push(entry);
   if (log.length > 80) log.shift();
   try {
-    return await f();
+    // The plugin's own changes, not the designer's (see guard).
+    return await asPlugin(f);
   } finally {
     entry.ms = Date.now() - entry.at;
   }
@@ -65,7 +76,7 @@ async function handleRequest(req: protocol.Request) {
 
 const actions: Record<string, (p: never) => Promise<unknown>> = {
   state: () => panel.state(),
-  claim: (p: { component: string }) => panel.claim(p),
+  claim: (p: { component: string; from?: string }) => panel.claim(p),
   preview: (p: { component: string }) => panel.preview(p),
   ready: (p: { component: string; note: string; scopes?: Record<string, "all" | "variants"> }) => panel.ready(p),
   reopen: (p: { component: string }) => panel.reopen(p),
@@ -120,15 +131,18 @@ const actions: Record<string, (p: never) => Promise<unknown>> = {
 
 // "New design" follows the canvas selection, and the row of what's selected is pointed at. (Through a global
 // so a development hot-reload swaps in the new code: the listener is registered once.)
-const gs = globalThis as { __cdlSelection?: boolean; __cdlSelected?: () => string | undefined };
+const gs = globalThis as {
+  __cdlSelection?: boolean;
+  __cdlSelected?: () => { component?: string; from?: string; branch?: string; why?: string };
+};
 gs.__cdlSelected = panel.selectedComponent;
 if (!gs.__cdlSelection) {
   figma.on("selectionchange", () => {
-    let component: string | undefined;
+    let picked: { component?: string; from?: string; branch?: string; why?: string } = {};
     try {
-      component = gs.__cdlSelected?.();
+      picked = gs.__cdlSelected?.() ?? {};
     } catch {}
-    figma.ui.postMessage({ kind: "selection", ...(component ? { component } : {}) } satisfies MainToUi);
+    figma.ui.postMessage({ kind: "selection", ...picked } satisfies MainToUi);
   });
   gs.__cdlSelection = true;
   // Edits on the page in view (a copy being changed): the panel looks again, at most every 0.8 s, so Ready for
@@ -141,15 +155,26 @@ if (!gs.__cdlSelection) {
       figma.ui.postMessage({ kind: "edited" } satisfies MainToUi);
     }, 800);
   };
+  // Live and the lanes are the code's: a move or resize is put back now, any other change at the next update.
+  const guard = (e: NodeChangeEvent) => {
+    void guardChanges(e, stack)
+      .then(({ restored, inside }) => {
+        if (restored.length)
+          figma.ui.postMessage({ kind: "liveEdited", names: restored.map((n) => n.name), inside: inside.length > 0 } satisfies MainToUi);
+      })
+      .catch(() => undefined);
+  };
   let watched: PageNode | null = null;
   const watch = () => {
     // The page watched may be gone (the demo's pages removed when quitting it): nothing to detach then.
     try {
       watched?.off("nodechange", edited);
+      watched?.off("nodechange", guard);
     } catch {}
     watched = figma.currentPage;
     try {
       watched.on("nodechange", edited);
+      watched.on("nodechange", guard);
     } catch {}
   };
   watch();

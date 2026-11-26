@@ -1,6 +1,8 @@
 // From a Figma-space delta to code-level changes. Ported from spike S6.
 // Deterministic: grouping and token translation happen here; an LLM only edits files.
 import type { Item } from "../diff/diff.js";
+import type { MergeReport } from "../merge/merge.js";
+import type { Raw } from "../snapshot/canonical.js";
 import { stableStringify } from "../util/stable.js";
 
 /** Key used to store the designer's scope choice for a change. */
@@ -27,6 +29,11 @@ export type Change = {
    * library): the code has no such token. `value` is what it resolves to in the designer's file.
    */
   foreign?: { variable: string; value: string; token: string }[];
+  /**
+   * The new value exactly as designed, when it's more than a number or a word (paints, effects, fonts): the
+   * wording above says it for people; this is the whole of it, so nothing is lost in the wording.
+   */
+  design?: unknown;
 };
 
 /** The variable collection CoDesignFlo creates from the project's tokens (DTCG). */
@@ -125,6 +132,26 @@ function describe(prop: string, v: unknown, weightTokens: Map<number, string>, b
     JSON.stringify(x)
       .match(/var\([^)]+\)/g)
       ?.map(cssVar) ?? [];
+  // Paints one by one, each with its opacity: a fill at 14% of a variable isn't the variable (the code drew the
+  // solid colour where the design had a tint, and a 40% navy read as solid navy).
+  if ((prop === "fills" || prop === "strokes") && Array.isArray(v)) {
+    const nodeRefs = boundTo ? [...new Set(bound(boundTo))] : [];
+    const paints = (v as { type?: string; color?: { r: number; g: number; b: number }; opacity?: number; visible?: boolean }[]).filter(
+      (p) => p.visible !== false,
+    );
+    if (!paints.length) return "(none)";
+    return paints
+      .map((p, i) => {
+        const base =
+          bound(p)[0] ??
+          nodeRefs[i] ??
+          nodeRefs[0] ??
+          (p.color ? `#${hex2(p.color.r)}${hex2(p.color.g)}${hex2(p.color.b)}` : (p.type ?? "paint").toLowerCase().replace(/_/g, " "));
+        const o = p.opacity ?? 1;
+        return o < 0.995 ? `${base} at ${Math.round(o * 100)}% opacity` : base;
+      })
+      .join(" + ");
+  }
   if (boundTo) {
     const b = [...new Set(bound(boundTo))];
     if (b.length) return b.join(" ");
@@ -175,7 +202,16 @@ export function group(items: Item[], dtcg: Record<string, unknown>, allVariants:
     const from = describe(prop, i.from, weightTokens, i.fromBound);
     const to = describe(prop, i.to, weightTokens, i.toBound);
     const key = JSON.stringify([layer, prop, from, to]);
-    const g = groups.get(key) ?? { layer, prop, kind: i.kind, from, to, variants: [] as string[], items: [] };
+    const g = groups.get(key) ?? {
+      layer,
+      prop,
+      kind: i.kind,
+      from,
+      to,
+      variants: [] as string[],
+      items: [],
+      ...(i.to !== null && typeof i.to === "object" ? { design: i.to } : {}),
+    };
     (g.variants as string[]).push(variantOf(i.target));
     g.items.push(i.id);
     for (const f of foreignOf(i)) if (!g.foreign?.some((x) => x.variable === f.variable)) g.foreign = [...(g.foreign ?? []), f];
@@ -186,6 +222,55 @@ export function group(items: Item[], dtcg: Record<string, unknown>, allVariants:
     .map((g, n) => ({
       ...g,
       id: `C${n + 1}`,
-      variants: (g.variants as string[]).length === allVariants.length ? "all" : (g.variants as string[]).sort(),
+      // Every version — or none to speak of (a page, a component without variants: its one version is "").
+      variants:
+        (g.variants as string[]).length === allVariants.length || (g.variants as string[]).every((v) => v === "")
+          ? "all"
+          : (g.variants as string[]).sort(),
     }));
+}
+
+/**
+ * Where the code reached a different result than the design for the same layer and property (the check's
+ * conflicts): what the design wants and what the code draws, in the same words as the changes.
+ */
+export type NotAsDesigned = { layer: string; prop: string; design: string; code: string };
+export function conflictsOf(m: MergeReport): NotAsDesigned[] {
+  const seen = new Set<string>();
+  const out: NotAsDesigned[] = [];
+  for (const i of m.ours) {
+    if (i.merge !== "conflict") continue;
+    const prop = i.prop ?? i.op ?? "?";
+    const layer = layerOf(i.target);
+    const c = i.against?.[0];
+    const row = {
+      layer,
+      prop,
+      design: describe(prop, i.to, new Map(), i.toBound),
+      code: c ? (c.op === "remove" ? "(removed it)" : describe(prop, c.to, new Map(), c.toBound)) : "(changed it)",
+    };
+    const id = JSON.stringify(row);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(row);
+  }
+  return out;
+}
+
+/** What a layer of the design is, beyond the one property that changed: its own properties, without its layers. */
+export function layerContext(design: Raw, layers: string[], max = 6): Record<string, Record<string, unknown>> {
+  const want = new Set(layers.filter((l) => l !== "(root)" && !l.includes(" > ")).slice(0, max));
+  const out: Record<string, Record<string, unknown>> = {};
+  const walk = (n: Raw) => {
+    // The key: on the node in a canonical snapshot (what the service keeps), under ds in the plugin's raw one.
+    const k = (n.k as string | undefined) ?? (n.ds as { k?: string } | undefined)?.k;
+    const path = k?.split("/").slice(2).join("/");
+    if (path && want.has(path) && !out[path]) {
+      const { children: _c, ds: _d, id: _i, k: _k, ...own } = n as Raw & { id?: unknown };
+      out[path] = own;
+    }
+    for (const c of (n.children ?? []) as Raw[]) walk(c);
+  };
+  walk(design);
+  return out;
 }

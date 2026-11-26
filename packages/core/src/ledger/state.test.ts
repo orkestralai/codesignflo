@@ -147,3 +147,11 @@ describe("sent back after a partial delivery", () => {
     expect([s.state, s.conflict, s.claim?.baselineGen]).toEqual(["in_design", false, "g2"]);
   });
 });
+
+describe("a claim from a branch's lane", () => {
+  it("keeps the branch (its version is what the design changes), even for a component not in Live yet", () => {
+    const s = run(ev({ kind: "claimed", claim: "c9", baselineGen: "", branch: "feat/trip-planner", by: "designer" }));
+    expect(s.state).toBe("in_design");
+    expect(s.claim).toMatchObject({ id: "c9", branch: "feat/trip-planner", baselineGen: "" });
+  });
+});

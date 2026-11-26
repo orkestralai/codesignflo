@@ -477,7 +477,10 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
     if (!name || typeof t!.value !== "string") return name;
     const drawn = hexToRgba(t!.value);
     const token = colours?.get(t!.token!);
-    return drawn && token && deltaE(drawn, token) >= SAME_COLOUR ? undefined : name;
+    // The token's colour at a lower opacity (color-mix(var(--x) 14%, transparent), a tint) is the token too: bound,
+    // the paint keeping its opacity, as a designer's fill of a variable at 14% is built.
+    const same = drawn && token && deltaE(token.a === 1 ? { ...drawn, a: 1 } : drawn, token) < SAME_COLOUR;
+    return drawn && token && !same ? undefined : name;
   };
   const byModule = new Map(Object.entries(registry.components).map(([key, c]) => [c.module, { key, ...c }]));
   const byKey = new Map(Object.entries(registry.components).map(([key, c]) => [key, { key, ...c }]));
@@ -743,7 +746,10 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
       props.fontSize = t.fontSize.value;
       props.lineHeight = t.lineHeight > 0 ? { unit: "PIXELS", value: t.lineHeight } : { unit: "AUTO" };
       props.letterSpacing = { unit: "PIXELS", value: t.letterSpacing };
-      props.fills = [t.color.value];
+      // Gradient-coloured text: the gradient is the text's fill.
+      props.fills = t.gradient
+        ? [`gradient:${JSON.stringify({ angle: t.gradient.angle, stops: t.gradient.stops.map((x) => [x.color.value, x.position]) })}`]
+        : [t.color.value];
       // A text box with its own width (fill, or fixed like a centred min-width) wraps; otherwise it hugs.
       props.textAutoResize = n.sizing.w === "hug" ? "WIDTH_AND_HEIGHT" : "HEIGHT";
       if (t.align) props.textAlignHorizontal = t.align;
@@ -756,7 +762,7 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
         props.textTruncation = "ENDING";
         props.maxLines = t.maxLines;
       }
-      const c = v(t.color);
+      const c = t.gradient ? undefined : v(t.color);
       if (c) paintBind.fills = c;
       const fs = v(t.fontSize);
       if (fs) bind.fontSize = fs;

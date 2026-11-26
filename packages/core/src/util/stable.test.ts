@@ -50,3 +50,14 @@ describe("values compare by content, not key order (snapshots stored in the serv
     expect(m.summary).toMatchObject({ convergent: 1, conflict: 0 });
   });
 });
+
+describe("the same design value", () => {
+  it("colours and opacities within one 8-bit step are the same; other numbers must match", async () => {
+    const { sameDesignValue } = await import("./stable.js");
+    const paint = (opacity: number, r = 1) => [{ type: "SOLID", color: { r, g: 0.2196, b: 0.2353 }, opacity }];
+    expect(sameDesignValue(paint(0.14), paint(0.1412))).toBe(true);
+    expect(sameDesignValue(paint(0.14), paint(0.2))).toBe(false);
+    expect(sameDesignValue(paint(1, 1), paint(1, 0.99))).toBe(false);
+    expect(sameDesignValue({ cornerRadius: 8 }, { cornerRadius: 8.001 })).toBe(false);
+  });
+});

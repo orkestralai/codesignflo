@@ -3,7 +3,7 @@
 // Every proposal item is classified before any code is touched. Candidate for packages/core.
 import { diff, type Item } from "../diff/diff.js";
 import type { Raw } from "../snapshot/canonical.js";
-import { sameValue, stableStringify } from "../util/stable.js";
+import { sameDesignValue, stableStringify } from "../util/stable.js";
 
 export type Classified = Item & {
   merge: "clean" | "conflict" | "convergent";
@@ -18,7 +18,7 @@ export type MergeReport = {
   summary: { clean: number; conflict: number; convergent: number; codeChanges: number };
 };
 
-const eq = sameValue;
+const eq = (a: unknown, b: unknown) => sameDesignValue(a, b);
 const usesToken = (i: Item) => `${JSON.stringify(i.to ?? null)}${JSON.stringify(i.toBound ?? null)}`.includes("var(");
 const sameIgnoringTokens = (a: unknown, b: unknown) =>
   stableStringify(a, (k) => k === "boundVariables") === stableStringify(b, (k) => k === "boundVariables");

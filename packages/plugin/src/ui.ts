@@ -259,40 +259,46 @@ const reviewWord = (r: PanelRow) =>
           : "Developer skipped it";
 
 const statusLine = (r: PanelRow) =>
-  r.question
-    ? "The developer has a question"
-    : reviewWord(r) && !(r.state === "ready_for_dev" && (r.progress || codeCheck(r)))
-      ? reviewWord(r)!
-      : r.conflict
-        ? "Code changed the same things"
-        : r.state === "ready_for_dev"
-          ? (codeCheck(r) ??
-            (r.progress
-              ? `In code: ${r.progress.done} of ${r.progress.total} changes`
-              : r.builder
-                ? `${r.builder} is building it`
-                : `Sent: ${r.note ?? ""}`))
-          : r.state === "design_new"
-            ? r.builder
-              ? `${r.builder} is building it`
-              : "New design, being built"
-            : r.state === "in_design"
-              ? r.claimedBy && view?.user && r.claimedBy !== view.user
-                ? `${r.claimedBy} is redesigning it`
-                : "You're editing your copy"
-              : r.state === "code_new"
-                ? "Built in code without a design"
-                : r.unseen
-                  ? "Changed in code"
-                  : r.state === "ignored"
-                    ? "No design needed"
-                    : r.warning
-                      ? "Doesn't look like the app here (font)"
-                      : r.differs?.length
-                        ? `Differs from the app in ${r.differs.length} place${r.differs.length > 1 ? "s" : ""}${r.score !== undefined ? ` · ${r.score}% matches` : ""}`
-                        : r.pins && Object.keys(r.pins).length
-                          ? `Matches the code, except ${Object.keys(r.pins).length} kept as design`
-                          : "Matches the code";
+  r.onBranch && r.state === "ready_for_dev" && !r.question
+    ? r.onBranch.done === r.onBranch.total
+      ? `Done on ${r.onBranch.branch}: closes when it's merged`
+      : `Being built on ${r.onBranch.branch}: ${r.onBranch.done} of ${r.onBranch.total} changes`
+    : r.branch && r.state === "in_sync"
+      ? `Only on ${r.branch} so far: claim it to redesign that version`
+      : r.question
+        ? "The developer has a question"
+        : reviewWord(r) && !(r.state === "ready_for_dev" && (r.progress || codeCheck(r)))
+          ? reviewWord(r)!
+          : r.conflict
+            ? "Code changed the same things"
+            : r.state === "ready_for_dev"
+              ? (codeCheck(r) ??
+                (r.progress
+                  ? `In code: ${r.progress.done} of ${r.progress.total} changes`
+                  : r.builder
+                    ? `${r.builder} is building it`
+                    : `Sent: ${r.note ?? ""}`))
+              : r.state === "design_new"
+                ? r.builder
+                  ? `${r.builder} is building it`
+                  : "New design, being built"
+                : r.state === "in_design"
+                  ? r.claimedBy && view?.user && r.claimedBy !== view.user
+                    ? `${r.claimedBy} is redesigning it`
+                    : "You're editing your copy"
+                  : r.state === "code_new"
+                    ? "Built in code without a design"
+                    : r.unseen
+                      ? "Changed in code"
+                      : r.state === "ignored"
+                        ? "No design needed"
+                        : r.warning
+                          ? "Doesn't look like the app here (font)"
+                          : r.differs?.length
+                            ? `Differs from the app in ${r.differs.length} place${r.differs.length > 1 ? "s" : ""}${r.score !== undefined ? ` · ${r.score}% matches` : ""}`
+                            : r.pins && Object.keys(r.pins).length
+                              ? `Matches the code, except ${Object.keys(r.pins).length} kept as design`
+                              : "Matches the code";
 
 /** What the designer kept as design on this component, each with a way back to the code's version. */
 const keptHtml = (r: PanelRow) => {
@@ -438,6 +444,10 @@ let menuFor: string | null = null;
 let query = "";
 /** The row of what's selected on the canvas (highlighted, scrolled into view). */
 let selectedRow: string | null = null;
+/** The canvas selection's lane item (a branch's version), when it's in a lane; claiming it copies that version. */
+let selectedFrom: string | null = null;
+/** Why the canvas selection can't be claimed (a section, a label, the designer's own frame). */
+let selectionWhy: string | null = null;
 /** Thumbnails by component (base64 PNG) and the version they show. */
 const thumbs = new Map<string, { version: string; png: string }>();
 
@@ -1240,7 +1250,7 @@ function guideScreen(): string {
         : ""
     }
     <div class="g-pages">
-      <div><b>Live</b> page — your app as the code draws it, kept up to date by the developer's updates. <i>Components</i> holds the components the code draws, <i>Pages</i> the pages, and <i>Screenshots</i>, level with each page, the app as the browser draws it, to compare with. Pages you designed are kept as you drew them, with the code's changes on top; what you didn't design is generated from the code. Live is locked: to change something, claim it.</div>
+      <div><b>Live</b> page — your app as the code draws it, kept up to date by the developer's updates. <i>Components</i> holds the components the code draws, <i>Pages</i> the pages, and <i>Screenshots</i>, level with each page, the app as the browser draws it, to compare with. Pages you designed are kept as you drew them, with the code's changes on top; what you didn't design is generated from the code. Live is the code's: to change something, click it and claim it (edits made in Live itself are moved to Proposals by the next update).</div>
       <div><b>Proposals</b> page — <i>Active</i>: your copies being changed and the designs you sent. <i>Archive</i>: what's done or withdrawn, and the designs Live is built on.</div>
       <div><b>Design System</b> page (optional, from the link at the bottom of the panel) — <i>Library</i>: your components (instances from your team library, or copies), each linked to a code component or not in code yet. <i>From code</i>: a copy of each code component you have no counterpart for, to accept, match or ignore. Live's pages are drawn with your linked components, and each pair shows where it differs from what the app draws.</div>
       <div><b>The loop</b> — you propose in Proposals → the developer's agent implements it → when the code matches, the proposal closes and Live updates.</div>
@@ -1983,6 +1993,7 @@ function render() {
     );
   if (cloud?.error) parts.push(`<div class="notice warn">${esc(cloud.error)}</div>`);
   parts.push(newerPluginNotice());
+  if (selectionWhy && view?.setUp) parts.push(`<div class="hint">${esc(selectionWhy)}</div>`);
   // A demo project: its own strip, first (what it is, the walkthrough, quitting).
   if (cloud?.project?.demo && view?.setUp)
     parts.push(
@@ -2688,7 +2699,14 @@ $("main").addEventListener("click", async (ev) => {
         readyFor = component;
         preview = null;
         render();
-        preview = await act<Preview>("preview", { component });
+        try {
+          preview = await act<Preview>("preview", { component });
+        } catch (e) {
+          // Not stuck on "Looking at your changes…": back to the list, saying what went wrong.
+          readyFor = null;
+          render();
+          throw e;
+        }
         render();
         ($("note") as HTMLTextAreaElement | null)?.focus();
         return;
@@ -2748,7 +2766,8 @@ $("main").addEventListener("click", async (ev) => {
         toast("Claimed. Your copy is in your lane in Proposals.");
         break;
       case "claim":
-        await act("claim", { component });
+        // The clicked lane item: that branch's version (else Live's, or the branch's for one only on a branch).
+        await act("claim", { component, ...(selectedRow === component && selectedFrom ? { from: selectedFrom } : {}) });
         guideDone({ claimed: true });
         open.add(component);
         toast("Your copy of the whole component (all its variants) is on top of your lane in Proposals. Edit it freely.");
@@ -2945,6 +2964,8 @@ window.onmessage = (ev: MessageEvent<{ pluginMessage?: MainToUi }>) => {
     void cloud?.send(m.events);
   } else if (m.kind === "selection") {
     selectedRow = m.component ?? null;
+    selectedFrom = m.from ?? null;
+    selectionWhy = m.why ?? (m.from && m.branch ? `${m.branch}'s version selected: Claim copies that one, not Live's.` : null);
     // Its section opens so the row can be seen.
     const row = selectedRow ? view?.rows.find((r) => r.component === selectedRow) : undefined;
     if (row) folded.delete(sectionOf(row));
@@ -2955,6 +2976,11 @@ window.onmessage = (ev: MessageEvent<{ pluginMessage?: MainToUi }>) => {
     if (!applying && view?.rows.some((r) => r.state === "in_design")) void refresh();
   } else if (m.kind === "changed") {
     toMain({ kind: "getContext" });
+  } else if (m.kind === "liveEdited") {
+    // Live and the lanes are the code's: say so once per change (moves and sizes were already put back).
+    toast(
+      `${m.names.length === 1 ? `"${m.names[0]}" is` : "These are"} the code's: put back as it was${m.inside ? " (changes inside it go at the next update)" : ""}. To change it, claim it (it's selected: Claim in its row).`,
+    );
   } else {
     send(m.msg);
   }

@@ -301,7 +301,16 @@ export async function cloudSync(
     await cloud.client
       .from("proposals")
       .update({
-        code_check: { done: c.done, total: c.total, conflicts: c.conflicts, exact: c.exact, branch: p.branch, commit: p.commit, at: now },
+        code_check: {
+          done: c.done,
+          total: c.total,
+          conflicts: c.conflicts,
+          ...(c.conflicting?.length ? { conflicting: c.conflicting } : {}),
+          exact: c.exact,
+          branch: p.branch,
+          commit: p.commit,
+          at: now,
+        },
       })
       .eq("project_id", cloud.projectId)
       .eq("claim_id", c.claim);

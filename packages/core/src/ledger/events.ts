@@ -58,7 +58,14 @@ export const EventSchema = z.discriminatedUnion("kind", [
   /** The code no longer has this component or page: Live's copy moved to Archive (the designer decides). */
   z.object({ ...base, kind: z.literal("removed_in_code"), commit: z.string() }),
   // design side
-  z.object({ ...base, kind: z.literal("claimed"), claim: z.string(), baselineGen: z.string() }),
+  z.object({
+    ...base,
+    kind: z.literal("claimed"),
+    claim: z.string(),
+    baselineGen: z.string(),
+    /** Claimed from a branch's lane (not in Live yet): the design is of that branch's version. */
+    branch: z.optional(z.string()),
+  }),
   z.object({ ...base, kind: z.literal("unclaimed"), claim: z.string() }),
   /** "Keep editing" after Ready for dev: back to In design at once (not only at the next sync; M6). */
   z.object({ ...base, kind: z.literal("reopened"), claim: z.string() }),

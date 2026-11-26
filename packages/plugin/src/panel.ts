@@ -1,5 +1,6 @@
 // Designer actions (main thread). They work with no CLI running: each one writes its fact into the file
 // (a design-side event, and the claim record on the proposal) and the developer's next sync picks it up.
+
 import {
   type Change,
   type ComponentState,
@@ -29,8 +30,11 @@ import {
   designerLane,
   enter,
   events,
+  isLabel,
+  laneCheckOf,
   me,
   meta,
+  PREVIEW,
   proposals,
   readBase,
   readIndex,
@@ -43,6 +47,7 @@ import {
   writeBase,
   writeClaim,
 } from "./facts.js";
+import { editable } from "./guard.js";
 import { applyOps, type Op } from "./rebase.js";
 import { snapshot } from "./serialize.js";
 
@@ -62,6 +67,10 @@ export type PanelRow = {
   builder?: string;
   whatsNew?: string;
   liveNodeId?: string;
+  /** Only on this branch's lane, not in Live yet: claimed as that branch's version. */
+  branch?: string;
+  /** Sent, and being built on a branch: how far, as that branch's lane last found it. */
+  onBranch?: { branch: string; done: number; total: number };
   proposalNodeId?: string;
   /** Designer actions recorded since the last sync (not yet seen by the developer). */
   pending: number;
@@ -158,7 +167,15 @@ export async function state(): Promise<PanelState> {
   const m = meta();
   if (!m) return { setUp: false, user: figma.currentUser?.name ?? null, rows: [], ...(await designsInFile()) };
   const { index, states, pending } = await current();
-  const open = new Map((await proposals()).filter((p) => p.role === "proposal").map((p) => [p.claim.component, p.node.id]));
+  const openCopies = (await proposals()).filter((p) => p.role === "proposal");
+  const open = new Map(openCopies.map((p) => [p.claim.component, p.node.id]));
+  // Sent designs a branch builds: how far, as its lane last found it (kept on the copy).
+  const onBranch = new Map(
+    openCopies.flatMap((p) => {
+      const c = p.claim.readyHash ? laneCheckOf(p.node) : null;
+      return c ? [[p.claim.component, { branch: c.branch, done: c.done, total: c.total }] as const] : [];
+    }),
+  );
   // A copy being changed: has anything changed yet? (The same comparison as the send screen's.)
   const edited = new Map<string, boolean>();
   for (const s of states.values()) {
@@ -191,6 +208,7 @@ export async function state(): Promise<PanelState> {
         ...(e?.whatsNew ? { whatsNew: e.whatsNew } : {}),
         ...(e?.liveNodeId ? { liveNodeId: e.liveNodeId } : {}),
         ...(open.get(s.component) ? { proposalNodeId: open.get(s.component) } : {}),
+        ...(onBranch.get(s.component) ? { onBranch: onBranch.get(s.component) } : {}),
         ...(edited.has(s.component) ? { edited: edited.get(s.component) } : {}),
         pending: pending.filter((p) => p.component === s.component).length,
         version: `${s.lastGen ?? ""}|${s.claim?.id ?? ""}`,
@@ -204,6 +222,21 @@ export async function state(): Promise<PanelState> {
         ...(e?.claim?.done && e.claim.total ? { progress: { done: e.claim.done, total: e.claim.total } } : {}),
       };
     });
+  // Components and pages only on a branch (its lane): claimable as that branch's version.
+  for (const [component, [first]] of await laneItems()) {
+    if (rows.some((r) => r.component === component) || !first) continue;
+    rows.push({
+      component,
+      name: first.node.name,
+      state: "in_sync",
+      unseen: false,
+      conflict: false,
+      liveNodeId: first.node.id,
+      branch: first.branch,
+      pending: 0,
+      version: `lane:${first.branch}`,
+    });
+  }
   rows.sort((a, b) => a.name.localeCompare(b.name));
   return {
     setUp: true,
@@ -307,6 +340,46 @@ export async function check(component: string, e: Omit<LedgerEvent, "id" | "at" 
   return before;
 }
 
+/**
+ * What the branches' lanes hold, by component or page: each lane's own items (a new component on feat/x, or its
+ * version of one Live has). The first lane that has an item wins for rows; a claim names the lane it's from.
+ */
+async function laneItems(): Promise<Map<string, { node: SceneNode; branch: string }[]>> {
+  const page = (await sections.components()).parent;
+  const out = new Map<string, { node: SceneNode; branch: string }[]>();
+  if (page?.type !== "PAGE") return out;
+  for (const sec of page.children) {
+    const branch = sec.type === "SECTION" ? sec.getSharedPluginData(NS, PREVIEW.of) : "";
+    if (!branch) continue;
+    for (const n of (sec as SectionNode).children) {
+      const k = keyOf(n);
+      if (!k || k.includes("/") || !isOriginal(n)) continue;
+      const component = k.replace(/^screen:/, "");
+      out.set(component, [...(out.get(component) ?? []), { node: n, branch }]);
+    }
+  }
+  return out;
+}
+
+/**
+ * What a claim copies: the lane item that was clicked (`from`: a branch's version), else Live's, else — a
+ * component or page only on a branch — that branch's.
+ */
+async function claimSource(component: string, from?: string): Promise<{ node: SceneNode; branch?: string }> {
+  if (from) {
+    const n = (await figma.getNodeByIdAsync(from)) as SceneNode | null;
+    const branch = n?.parent?.type === "SECTION" ? n.parent.getSharedPluginData(NS, PREVIEW.of) : "";
+    if (n && branch && keyOf(n).replace(/^screen:/, "") === component) return { node: n, branch };
+  }
+  try {
+    return { node: await liveSet(component) };
+  } catch (e) {
+    const lane = (await laneItems()).get(component)?.[0];
+    if (lane) return lane;
+    throw e;
+  }
+}
+
 export async function liveSet(component: string): Promise<ComponentSetNode | ComponentNode> {
   const e = readIndex().find((x) => x.component === component);
   const byId = e?.liveNodeId ? await figma.getNodeByIdAsync(e.liveNodeId) : null;
@@ -338,15 +411,35 @@ function place(section: SectionNode, node: SceneNode) {
  * The component or page the canvas selection belongs to (its Live root, a proposal or archived copy), so the
  * panel can point at its row — the other way round from clicking a row.
  */
-export function selectedComponent(): string | undefined {
+export function selectedComponent(): { component?: string; from?: string; branch?: string; why?: string } {
   const first = figma.currentPage.selection[0];
-  for (let n: BaseNode | null = first ?? null; n && n.type !== "PAGE" && n.type !== "DOCUMENT"; n = n.parent) {
+  if (!first) return {};
+  for (let n: BaseNode | null = first; n && n.type !== "PAGE" && n.type !== "DOCUMENT"; n = n.parent) {
     const claim = claimOf(n);
-    if (claim) return claim.component;
+    if (claim) return { component: claim.component };
+    // A screenshot: the page it shows (in a lane's screenshots, that branch's page).
+    const of = n.getSharedPluginData(NS, NODE.role) === SHOT.role ? n.getSharedPluginData(NS, SHOT.of) : "";
+    if (of && !of.includes("/") && of.startsWith("screen:")) {
+      const lane = n.parent?.type === "SECTION" ? n.parent.getSharedPluginData(NS, PREVIEW.shotsOf) : "";
+      const laneSec = lane
+        ? ((n.parent?.parent as PageNode | null)?.findChild(
+            (s) => s.type === "SECTION" && s.getSharedPluginData(NS, PREVIEW.of) === lane,
+          ) as SectionNode | null)
+        : null;
+      const page = laneSec?.findChild((x) => keyOf(x) === of && isOriginal(x)) ?? null;
+      return { component: of.replace(/^screen:/, ""), ...(page ? { from: page.id, branch: lane } : {}) };
+    }
     const k = keyOf(n);
-    if (k && !k.includes("/")) return k.replace(/^screen:/, "");
+    if (k && !k.includes("/")) {
+      // In a branch's lane: that branch's version.
+      const lane = n.parent?.type === "SECTION" ? n.parent.getSharedPluginData(NS, PREVIEW.of) : "";
+      return { component: k.replace(/^screen:/, ""), ...(lane && isOriginal(n as SceneNode) ? { from: n.id, branch: lane } : {}) };
+    }
   }
-  return undefined;
+  // Something that isn't a component or page: say why it can't be claimed.
+  if (first.type === "SECTION") return { why: "That's a section: click a component or page inside it to claim it." };
+  if (isLabel(first)) return { why: "That's a label: click the component or page beside it." };
+  return { why: "Not a component or page from the code: send your own design with New design instead." };
 }
 
 export async function show(p: { nodeId: string }) {
@@ -378,17 +471,20 @@ export async function shotForCopy(live: SceneNode, copy: SceneNode) {
   const c = shot.clone();
   lane.shots.appendChild(c);
   c.setSharedPluginData(NS, SHOT.of, copy.id);
-  c.locked = true;
+  editable(c);
   stack(lane.items);
 }
 
-export async function claim(p: { component: string }) {
+export async function claim(p: { component: string; from?: string }) {
   const before = await check(p.component, { kind: "claimed", component: p.component, claim: "check", baselineGen: "check" } as never);
-  const live = await liveSet(p.component);
-  const baselineGen = live.getSharedPluginData(NS, NODE.gen) || before.lastGen || "";
+  // Live's version, or a branch's (a lane item clicked, or a component or page only on a branch).
+  const source = await claimSource(p.component, p.from);
+  const live = source.node as ComponentSetNode;
+  // A branch's version has no Live generation: the copy's own snapshot (written below) is its baseline.
+  const baselineGen = source.branch ? "" : live.getSharedPluginData(NS, NODE.gen) || before.lastGen || "";
   const base = await canonOf(live);
   const copy = live.clone();
-  copy.locked = false; // Live is locked; the designer's copy is theirs to edit
+  editable(copy); // Live's inside is locked; the designer's copy is theirs to edit
   writeBase(copy, base);
   place(await designerLane(me()), copy);
   const record = {
@@ -398,11 +494,18 @@ export async function claim(p: { component: string }) {
     ...(me().id ? { byId: me().id } : {}),
     at: new Date().toISOString(),
     baselineGen,
+    ...(source.branch ? { branch: source.branch } : {}),
   };
   copy.setSharedPluginData(NS, NODE.role, "proposal");
   writeClaim(copy, record);
-  await shotForCopy(live, copy);
-  appendEvent({ kind: "claimed", component: p.component, claim: record.id, baselineGen } as never);
+  if (!source.branch) await shotForCopy(live, copy);
+  appendEvent({
+    kind: "claimed",
+    component: p.component,
+    claim: record.id,
+    baselineGen,
+    ...(source.branch ? { branch: source.branch } : {}),
+  } as never);
   await show({ nodeId: copy.id });
   return { proposalNodeId: copy.id };
 }
@@ -453,9 +556,23 @@ export type Preview = { changes: PreviewChange[]; content: Change[]; already: Ch
  * `delta`: the copy against the Live version it was made from (stored on the copy), with today's Live to
  * flag overlaps. Changes the developer already made the same way are listed apart ("already in code").
  */
+/**
+ * The version a copy was claimed from, as it is now: Live's, or — claimed from a branch's lane — that lane's (the
+ * copy's own starting point when the lane is gone: merged, or disconnected).
+ */
+async function claimedVersion(component: string, copy: SceneNode) {
+  const branch = claimOf(copy)?.branch;
+  if (!branch) return canonOf(await liveSet(component));
+  const lane = (await laneItems()).get(component)?.find((x) => x.branch === branch);
+  if (lane) return canonOf(lane.node);
+  const base = readBase(copy) as Awaited<ReturnType<typeof canonOf>> | null;
+  if (base) return base;
+  return canonOf(await liveSet(component));
+}
+
 export async function preview(p: { component: string }): Promise<Preview> {
   const node = await openProposal(p.component);
-  const live = await canonOf(await liveSet(p.component));
+  const live = await claimedVersion(p.component, node);
   const base = (readBase(node) as ReturnType<typeof canonicalize> | null) ?? live;
   const m = merge(base, await canonOf(node), live);
   const variants = (live.children ?? []).map((v) =>
@@ -542,7 +659,6 @@ export async function ready(p: { component: string; note: string; scopes?: Recor
   // The hash of the proposal as it is now; if it changes after "ready", sync moves it back to "in design".
   const snap = await snapshot(node);
   const readyHash = hash(stringify(canonicalize(snap.tree, { variables: snap.variables, styles: snap.styles })));
-  node.locked = true;
   writeClaim(node, { ...record, note, readyHash, ...(p.scopes && Object.keys(p.scopes).length ? { scopes: p.scopes } : {}) });
   appendEvent({ kind: "ready", component: p.component, claim: record.id, note, readyHash } as never);
   // The proposal itself for the service (signed in): the developer gets it without Figma. Layer snapshots
@@ -687,7 +803,6 @@ async function designNewFrom(node: SceneNode, p: { name: string; note: string; k
     name,
     kind,
   });
-  copy.locked = true;
   appendEvent({ kind: "designed_new", component: key, claim: id, note } as never);
   figma.ui.postMessage({
     kind: "cloudProposal",

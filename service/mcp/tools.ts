@@ -15,11 +15,13 @@ import {
   comparedLines,
   differenceLines,
   keptLines,
+  layerContext,
   type LedgerEvent,
   markPresentation,
   missingPieces,
   nextSteps,
   newDesignInstructions,
+  type NotAsDesigned,
   ordered,
   proposalInstructions,
   readEvent,
@@ -328,7 +330,13 @@ ${out.text.content[0]!.text}`);
         const proj = await member(c, p);
         const st = fold(await history(c, p)).get(component);
         if (!st?.claim) return `${component} has no open proposal (state: ${st?.state ?? "unknown"}). Call status.`;
-        const { data: row } = await c.from("proposals").select("payload").eq("project_id", p).eq("claim_id", st.claim.id).maybeSingle();
+        const { data: row } = await c
+          .from("proposals")
+          .select("payload, code_check")
+          .eq("project_id", p)
+          .eq("claim_id", st.claim.id)
+          .maybeSingle();
+        const check = (row?.code_check ?? null) as { conflicting?: NotAsDesigned[]; commit?: string; branch?: string | null } | null;
         const payload = (row?.payload ?? {}) as { base?: Raw; copy?: Raw; spec?: Raw; scopes?: Record<string, "all" | "variants">; figma?: FigmaPlace };
         const place = payload.figma ?? { nodeId: "" };
         const upload = await latestUpload(c, p);
@@ -343,7 +351,8 @@ ${out.text.content[0]!.text}`);
         }
         if (st.state !== "ready_for_dev") return `${component} is ${st.state.replace(/_/g, " ")}: nothing to implement yet.`;
         const claimed = payload.base ?? (st.claim.baselineGen ? await generation(c, p, component, st.claim.baselineGen) : null);
-        const live = (st.lastGen ? await generation(c, p, component, st.lastGen) : null) ?? claimed;
+        // Claimed from a branch's lane: that branch's version is the base and what the code has (not Live's).
+        const live = st.claim.branch ? claimed : ((st.lastGen ? await generation(c, p, component, st.lastGen) : null) ?? claimed);
         if (!payload.copy || !claimed || !live) return `The designer's copy of ${component} isn't in the service yet: ask them to send it again from the plugin.`;
         const dtcg = (upload?.payload.dtcg ?? {}) as Record<string, unknown>;
         const designWins = (await history(c, p)).some((e) => e.kind === "resolved" && e.claim === st.claim!.id && e.take === "design");
@@ -369,7 +378,21 @@ ${out.text.content[0]!.text}`);
               ...(entry ? { entry } : {}),
               page,
               uses: systemUses(payload.copy as Raw),
+              // The changed layers as the designer made them, all their properties, for context.
+              layers: layerContext(payload.copy as Raw, (changes as Change[]).map((x) => x.layer)),
+              // What the check after the last sync found the code drawing differently.
+              ...(check?.conflicting?.length
+                ? {
+                    notAsDesigned: {
+                      at: `${check.branch ?? "a branch"} @${(check.commit ?? "").slice(0, 7)}`,
+                      rows: check.conflicting,
+                    },
+                  }
+                : {}),
             }) +
+            (st.claim.branch
+              ? `\n- Designed on ${st.claim.branch}'s version (not in Live yet): build it on ${st.claim.branch} (git checkout ${st.claim.branch}), then sync there.`
+              : "") +
             `\n- ${buildModeLine(proj.buildMode, page)}` +
             planLine(st),
         };

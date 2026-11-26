@@ -72,6 +72,8 @@ export type Proposal = {
     readyHash?: string;
     note?: string;
     scopes?: Record<string, "all" | "variants">;
+    /** Claimed from this branch's lane (not Live's version). */
+    branch?: string;
   };
   role: string;
   locked?: boolean;
@@ -149,6 +151,40 @@ export type UpdateResult = { states: Map<string, ComponentState>; notes: string[
 
 const now = () => new Date().toISOString();
 const canon = (s: Snap) => canonicalize(s.tree, { variables: s.variables, styles: s.styles, ignoreRootName: true });
+
+/**
+ * A designer's copy against what the code built in Figma (Live's item, or a branch lane's): how many of the design's
+ * changes it has. The base is the version the copy was claimed from: a Live generation, or — claimed from a
+ * branch's lane, which has no Live generation — the copy's own starting point, kept on it.
+ */
+export async function designAgainst(
+  s: Figma,
+  p: {
+    copyId: string;
+    builtId: string;
+    base?: Raw | null;
+    dtcg: Record<string, unknown>;
+    scopes?: Record<string, "all" | "variants">;
+    designWins?: boolean;
+  },
+) {
+  const theirs = canon(await s.call<Snap>("snapshot", { id: p.builtId }));
+  const own = p.base ?? (await s.call<Raw | null>("proposalBase", { id: p.copyId }).catch(() => null));
+  const base = withDataTags(own ?? theirs, theirs);
+  const projectTokens = new Set(tokenNames(p.dtcg).values());
+  const ours = adoptForeignVariables(withDataTags(canon(await s.call<Snap>("snapshot", { id: p.copyId })), theirs), projectTokens);
+  const { m, changes, content } = deltaFor({
+    base,
+    ours,
+    theirs,
+    dtcg: p.dtcg,
+    ...(p.scopes ? { scopes: p.scopes } : {}),
+    ...(p.designWins ? { designWins: true } : {}),
+  });
+  const conflicts = p.designWins ? 0 : m.summary.conflict;
+  const left = changes.reduce((n, c) => n + c.items.length, 0);
+  return { m, changes, content, done: m.summary.convergent, total: m.summary.convergent + left + conflicts, conflicts };
+}
 
 /** The snapshot minus tags that aren't design (data-text marks), for generation ids. */
 function withoutTags(r: Raw): Raw {
@@ -816,11 +852,14 @@ export async function computeDeltas(s: Figma, store: Store, dtcg: Record<string,
     const st = states.get(p.claim.component);
     if (st?.state !== "ready_for_dev") continue;
     const liveId = ids[p.claim.component];
-    if (!liveId) throw new Error(`Live ${p.claim.component} not found`);
+    // Not in Live (yet): a design claimed from a branch's lane, checked on that branch's syncs until it's merged.
+    if (!liveId) continue;
     const theirs = canon(await s.call<Snap>("snapshot", { id: liveId }));
     // The ledger's baseline moves forward after a partial delivery; the copy's record keeps the original.
     const baseGen = st.claim?.baselineGen || p.claim.baselineGen;
-    const base = withDataTags((baseGen && (await store.generation(p.claim.component, baseGen))) || theirs, theirs);
+    // Claimed from a branch's lane (no Live generation): the copy's own starting point is its base.
+    const own = !baseGen || p.claim.branch ? await s.call<Raw | null>("proposalBase", { id: p.nodeId }).catch(() => null) : null;
+    const base = withDataTags((baseGen && (await store.generation(p.claim.component, baseGen))) || own || theirs, theirs);
     // Variables the designer used that the code has since made into tokens are those tokens.
     const ours = adoptForeignVariables(withDataTags(canon(await s.call<Snap>("snapshot", { id: p.nodeId })), theirs), projectTokens);
     const designWins = store.ledger().some((e) => e.kind === "resolved" && e.claim === p.claim.id && e.take === "design");

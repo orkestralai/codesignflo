@@ -100,9 +100,12 @@ export {
   adoptForeignVariables,
   type Change,
   changeKey,
+  conflictsOf,
   cssVar,
   group,
+  layerContext,
   layerOf,
+  type NotAsDesigned,
   TOKENS_COLLECTION,
   tokenForVariable,
 } from "./group/group.js";

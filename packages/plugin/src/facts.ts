@@ -17,6 +17,7 @@ import {
   protocol,
   ROOT,
 } from "@codesignflo/core";
+import { readOnly } from "./guard.js";
 
 const root = () => figma.root;
 const readJson = (n: BaseNode, key: string): unknown => {
@@ -289,7 +290,14 @@ export async function splitActive() {
 
 /** A label beside a Live component ("In your Library", "In From code"): laid out with it, not as an item. */
 export const LABEL = { role: "dsLabel", for: "dsFor", lane: "labelLane", copy: "labelCopy" } as const;
-const isLabel = (n: BaseNode) => n.getSharedPluginData(NS, NODE.role) === LABEL.role;
+/** On a designer's copy: how far it is on a branch, as the last lane build found it ({branch, done, total, conflicts, commit, at}). */
+export const LANE_CHECK = "laneCheck";
+export type LaneCheck = { branch: string; done: number; total: number; conflicts: number; commit: string; at: string };
+export const laneCheckOf = (n: BaseNode): LaneCheck | null => {
+  const raw = n.getSharedPluginData(NS, LANE_CHECK);
+  return raw ? (JSON.parse(raw) as LaneCheck) : null;
+};
+export const isLabel = (n: BaseNode) => n.getSharedPluginData(NS, NODE.role) === LABEL.role;
 
 /**
  * A label beside an item of a section (by its key), linking to another node: laid out by stack, one per item.
@@ -466,16 +474,23 @@ const SHOTS_BESIDE: Record<string, { shots: string; pair: (n: SceneNode) => stri
   [LAYOUT.proposals.sections.active]: { shots: LAYOUT.proposals.sections.screenshots, pair: (n) => n.id },
 };
 const byId = (n: SceneNode) => n.id;
+/** A branch's lane on the Live page ("Branch: <name>"), and the section of its pages' screenshots beside it. */
+export const PREVIEW = { of: "previewOf", shotsOf: "previewShotsOf" } as const;
+const byKey = (n: SceneNode) => n.getSharedPluginData(NS, NODE.k);
 const siblingSection = (s: SectionNode, f: (n: SceneNode) => boolean) =>
   s.parent?.type === "PAGE" ? ((s.parent.findChild((n) => n.type === "SECTION" && f(n)) as SectionNode | null) ?? null) : null;
 /** The section of screenshots beside a section of items, and how an item is matched with its screenshot. */
 function besideOf(s: SectionNode): { shots: SectionNode | null; pair: (n: SceneNode) => string } | null {
+  const branch = s.getSharedPluginData(NS, PREVIEW.of);
+  if (branch) return { shots: siblingSection(s, (n) => n.getSharedPluginData(NS, PREVIEW.shotsOf) === branch), pair: byKey };
   if (laneKind(s) === "active") return { shots: siblingSection(s, (n) => laneKind(n) === "shots" && sameLane(n, s)), pair: byId };
   const named = !laneKind(s) ? SHOTS_BESIDE[s.name] : undefined;
   return named ? { shots: siblingSection(s, (n) => !laneKind(n) && n.name === named.shots), pair: named.pair } : null;
 }
 /** For a section of screenshots: the section of items it's laid out with. */
 function mirrorOf(s: SectionNode): SectionNode | null {
+  const branch = s.getSharedPluginData(NS, PREVIEW.shotsOf);
+  if (branch) return siblingSection(s, (n) => n.getSharedPluginData(NS, PREVIEW.of) === branch);
   if (laneKind(s) === "shots") return siblingSection(s, (n) => laneKind(n) === "active" && sameLane(n, s));
   if (laneKind(s)) return null;
   const items = Object.entries(SHOTS_BESIDE).find(([, v]) => v.shots === s.name)?.[0];
@@ -531,6 +546,15 @@ export function stack(section: SectionNode) {
       if (labels.has(of) || !section.children.some((x) => !isLabel(x) && x.getSharedPluginData(NS, NODE.k) === of)) c.remove();
       else labels.set(of, c);
     }
+  // Clickable: what a designer picks to claim (a locked layer can't be clicked on the canvas). Files from before
+  // plugin 0.5.3 had Live, lanes, screenshots and sent copies locked. Labels stay locked. On the Live page (Live and
+  // the lanes, the code's) each item is read-only: its inside locked, clicks reaching the item (see guard).
+  const codes = page?.type === "PAGE" && page.name === LAYOUT.live.page;
+  for (const c of [...section.children, ...(shotSection?.children ?? [])]) {
+    if (isLabel(c)) continue;
+    if (codes) readOnly(c, c.parent as SectionNode);
+    else if (c.locked) c.locked = false;
+  }
   const items = [...section.children].filter((c) => !isLabel(c)).map((c) => ({ c, at: c.getSharedPluginData(NS, PLACED_AT), y: c.y }));
   items.sort((a, b) => (a.at && b.at ? (a.at < b.at ? 1 : a.at > b.at ? -1 : 0) : a.at ? -1 : b.at ? 1 : a.y - b.y));
   let y = GAP;

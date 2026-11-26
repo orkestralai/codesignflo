@@ -2,6 +2,7 @@
 // Nodes are found by sync key (originals only: id == origId). Every property is
 // read-compared-written; the returned stats count actual writes, so a no-op run reports zeros.
 // Ported from spikes S4/S7 (11/11 and 8/8 checks in real Figma).
+
 import {
   colourSeverity,
   countLook,
@@ -32,6 +33,7 @@ import {
   isShot,
   laneOf,
   linkLabel,
+  PREVIEW,
   proposals,
   readChunked,
   SHOT,
@@ -41,6 +43,7 @@ import {
   toArchive,
   writeChunked,
 } from "./facts.js";
+import { editable } from "./guard.js";
 
 const COLLECTION = "Tokens";
 
@@ -236,7 +239,26 @@ const setSrc = (root: BaseNode, h: string | undefined) => {
 };
 /** Prefix of a branch preview's section on the Live page. */
 export const BRANCH_PREFIX = "Branch: ";
-const BRANCH = { of: "previewOf", commit: "previewCommit", lane: "previewLane" } as const;
+const BRANCH = { of: PREVIEW.of, commit: "previewCommit", lane: "previewLane" } as const;
+
+/**
+ * A lane's screenshots: the app as the branch builds it, each level with its page in the lane (as Live's
+ * Screenshots are with Live's pages). Made right after the lane when its first page has one.
+ */
+async function branchShots(branch: string, create = true): Promise<SectionNode | null> {
+  const lane = await branchSection(branch, false);
+  const page = lane?.parent;
+  if (!lane || page?.type !== "PAGE") return null;
+  const found = page.findChild((n) => n.type === "SECTION" && n.getSharedPluginData(NS, PREVIEW.shotsOf) === branch) as SectionNode | null;
+  if (found || !create) return found;
+  const sec = figma.createSection();
+  sec.name = `${BRANCH_PREFIX}${branch} — as built (browser)`;
+  sec.setSharedPluginData(NS, PREVIEW.shotsOf, branch);
+  page.insertChild(page.children.indexOf(lane) + 1, sec);
+  sec.y = 0;
+  sec.resizeWithoutConstraints(1600, 1200);
+  return sec;
+}
 
 async function branchSection(branch: string, create = true): Promise<SectionNode | null> {
   await figma.loadAllPagesAsync();
@@ -310,6 +332,7 @@ export async function previewEnd(p: {
 }) {
   const sec = await branchSection(p.branch, false);
   if (!sec?.children.some((c) => keyOf(c))) {
+    (await branchShots(p.branch, false))?.remove();
     sec?.remove();
     await dropLaneLabels(p.branch);
     return { removed: !!sec };
@@ -330,7 +353,14 @@ export async function previewEnd(p: {
     const lane = copy ? laneOf(copy.node) : null;
     const k = copy?.node.getSharedPluginData(NS, NODE.k);
     if (!copy || !lane || !k) continue;
-    await linkLabel(lane, k, `Being built on ${p.branch} · ${how} →`, item.id, p.branch, copy.node.id);
+    await linkLabel(
+      lane,
+      k,
+      d.done === d.total ? `Done on ${p.branch} · closes when it's merged →` : `Being built on ${p.branch} · ${how} →`,
+      item.id,
+      p.branch,
+      copy.node.id,
+    );
     marked.add(copy.node.id);
     stack(lane);
   }
@@ -346,6 +376,7 @@ export async function previewRemove(p: { branches: string[] }) {
     await dropLaneLabels(b);
     const sec = await branchSection(b, false);
     if (!sec) continue;
+    (await branchShots(b, false))?.remove();
     for (const n of sec.children) n.locked = false;
     sec.remove();
     removed++;
@@ -454,7 +485,8 @@ async function paintsEqual(node: SceneNode & MinimalFillsMixin, field: "fills" |
     }
     if (p.type !== "SOLID") return false;
     if (bindTo) {
-      if (!boundTo(p.boundVariables?.color, bindTo)) return false;
+      // Bound, and at the same opacity (a variable at 14% is a tint, not the variable's colour).
+      if (!boundTo(p.boundVariables?.color, bindTo) || Math.abs((p.opacity ?? 1) - alpha(want[i]!)) > 0.005) return false;
     } else if (toHex(p.color, p.opacity ?? 1) !== want[i]!.toLowerCase()) return false;
   }
   return true;
@@ -1373,7 +1405,7 @@ function adoptable(src: SceneNode, into: SectionNode): SceneNode {
   const copy = src.clone();
   into.appendChild(copy);
   for (const k of copy.getSharedPluginDataKeys(NS)) copy.setSharedPluginData(NS, k, "");
-  copy.locked = false;
+  editable(copy);
   return copy;
 }
 
@@ -2310,9 +2342,9 @@ export async function reconcile(p0: { spec: SpecNode; gen?: string; adoptFrom?: 
   // Only write what differs: any write to a main component makes Figma refresh all its instances.
   const role = previewSec ? "preview" : "live";
   if (set.getSharedPluginData(NS, NODE.role) !== role) set.setSharedPluginData(NS, NODE.role, role);
-  // Live is generated: locked against accidental edits (M6). Deliberate edits after unlocking are still
-  // saved as a proposal by sync (W11). The plugin API ignores locks.
-  if (!set.locked) set.locked = true;
+  // Not locked: a locked layer can't be clicked on the canvas, and clicking a component is how a designer picks
+  // it to claim. Edits made in Live are still caught and saved as a proposal by the next update (W11).
+  if (set.locked) set.locked = false;
   if (p.gen && set.getSharedPluginData(NS, NODE.gen) !== p.gen) set.setSharedPluginData(NS, NODE.gen, p.gen);
   await fitToApp(spec, index, stats);
   markBuilt(set, p.specHash, stats);
@@ -2443,7 +2475,8 @@ export async function reconcileScreen(p0: {
   markBuilt(root, p.specHash, stats);
   setSrc(root, p0.specHash);
   if (previewSec && root.getSharedPluginData(NS, NODE.role) !== "preview") root.setSharedPluginData(NS, NODE.role, "preview");
-  if (!root.locked) root.locked = true;
+  // Not locked, so it can be clicked to claim (see reconcile).
+  if (root.locked) root.locked = false;
   stack(screens);
   return { id: root.id, stats };
 }
@@ -2479,13 +2512,14 @@ export async function exportNode(p: { k?: string; id?: string; width?: number })
  * draws). Replaced when the screenshot changes; stack() keeps it level with its page and drops it when the
  * page is gone.
  */
-export async function placeShot(p: { k: string; ref: string; w: number; h: number }) {
-  const screens = await screensSection();
-  const page = indexKeyed(screens).get(p.k);
-  if (!page) return { placed: false };
+export async function placeShot(p: { k: string; ref: string; w: number; h: number; preview?: string }) {
+  // A branch's page: in its lane, its screenshot in the lane's own screenshots section.
+  const screens = p.preview ? await branchSection(p.preview, false) : await screensSection();
+  const page = screens ? indexKeyed(screens).get(p.k) : undefined;
+  if (!screens || !page) return { placed: false };
   const hash = imageHash(p.ref);
   if (!hash) throw new Error("its picture didn't reach this file");
-  const shots = await sections.liveShots();
+  const shots = p.preview ? (await branchShots(p.preview))! : await sections.liveShots();
   let shot = shotOf(shots, p.k);
   // Unchanged only when its fill really is that picture: a frame whose image Figma dropped kept the same ref and
   // stayed blank on every update after.
@@ -2507,7 +2541,6 @@ export async function placeShot(p: { k: string; ref: string; w: number; h: numbe
   shot.fills = [{ type: "IMAGE", imageHash: hash, scaleMode: "FILL" }];
   shot.clipsContent = true;
   shot.setSharedPluginData(NS, SHOT.ref, p.ref);
-  shot.locked = true;
   stack(screens);
   return { placed: true };
 }
@@ -2531,7 +2564,6 @@ export async function demoShotsFromLive() {
     shot.locked = false;
     shot.fills = [{ type: "IMAGE", imageHash: image.hash, scaleMode: "FILL" }];
     shot.setSharedPluginData(NS, SHOT.ref, `live:${image.hash}`);
-    shot.locked = true;
     made++;
   }
   return { made };

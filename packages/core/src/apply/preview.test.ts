@@ -54,7 +54,8 @@ describe("branch previews", () => {
     const r = await applyPreview(s, input("#f00"), "feature-x", (l) => lines.push(l));
     expect(r.built).toEqual(["components.button", "pages.home"]);
     expect(r.removed).toEqual(["components.old"]);
-    expect(calls.map(([m]) => m)).toEqual(["previewPlan", "previewStart", "reconcile", "reconcileScreen", "previewEnd"]);
+    // readFacts: the designs this branch builds, checked against what the lane built (read only).
+    expect(calls.map(([m]) => m)).toEqual(["previewPlan", "previewStart", "reconcile", "reconcileScreen", "readFacts", "previewEnd"]);
     expect(calls[1]![1]).toMatchObject({ branch: "feature-x", keep: ["components.button", "screen:pages.home"] });
     expect(calls[2]![1]).toMatchObject({ preview: "feature-x" });
     expect(calls[3]![1]).toMatchObject({ preview: "feature-x" });
@@ -62,8 +63,8 @@ describe("branch previews", () => {
     expect(calls.some(([m]) => /tokensPush|setGen|writeIndex|ackEvents|archive/.test(m))).toBe(false);
     expect(lines.some((l) => l.includes("not on feature-x (removed there): components.old"))).toBe(true);
     // A one-off preview: no lane, no designs to mark.
-    expect(calls[4]![1]).not.toHaveProperty("lane");
-    expect(calls[4]![1]).toMatchObject({ designs: [] });
+    expect(calls[5]![1]).not.toHaveProperty("lane");
+    expect(calls[5]![1]).toMatchObject({ designs: [] });
   });
 
   it("a connected branch's lane: who connected it and the designs it builds go to the plugin", async () => {
