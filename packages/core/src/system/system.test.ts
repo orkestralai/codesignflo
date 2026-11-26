@@ -6,6 +6,7 @@ import {
   codeProps,
   compareComponents,
   type LibraryComponent,
+  lintLink,
   mapProps,
   mapVariant,
   normName,
@@ -141,6 +142,38 @@ describe("a linked pair's differences", () => {
         map,
       ),
     ).toEqual(["nothing for loading in your Library — its versions all show the same variant"]);
+  });
+  it("borders, shadows, padding, gap and text colour too; colours compared as people see them", () => {
+    const map = mapProps({}, {});
+    const code = {
+      props: {},
+      w: 10,
+      h: 10,
+      fill: "#2563eb",
+      stroke: { color: "#e5e7eb", width: 1 },
+      padding: [8, 12, 8, 12] as [number, number, number, number],
+      gap: 8,
+      textColor: "#111827",
+    };
+    const lib = {
+      ...code,
+      fill: "#2563ec",
+      shadow: "0 4 12",
+      padding: [8, 16, 8, 16] as [number, number, number, number],
+      gap: 4,
+      textColor: "#ffffff",
+    };
+    expect(compareComponents([code], [lib], map)).toEqual([
+      "default: text colour #ffffff vs #111827; shadow 0 4 12 vs none; padding 8 16 8 16 vs 8 12 8 12; gap 4 vs 8",
+    ]);
+  });
+  it("a link that no longer holds: a Library property or value renamed or removed, a code property gone", () => {
+    const map = { props: { size: "Size", tone: "Tone" }, values: { size: { sm: "Small", lg: "Large" }, tone: {} } };
+    expect(lintLink([{ props: { size: "sm" }, w: 1, h: 1 }], [{ props: { Size: "Small" }, w: 1, h: 1 }], map)).toEqual([
+      "your Library has no Size=Large any more (the code's size=lg shows it)",
+      "the code has no tone any more (linked to your Tone)",
+      "your Library has no Tone any more (the code's tone is linked to it): renamed? link the component again",
+    ]);
   });
   it("nothing when they agree", () => {
     const map = mapProps({}, {});

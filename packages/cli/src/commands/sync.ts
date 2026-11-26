@@ -15,10 +15,11 @@ import {
   compileScreens,
   type Delivery,
   designerText,
-  type IRNode,
   type Registry,
   type Store,
+  splitExamples,
   stringify,
+  tokenColours,
   tokenNames,
   type UpdateInput,
 } from "@codesignflo/core";
@@ -32,6 +33,7 @@ import { VERSION } from "../version.js";
 import { withPlugin } from "./connect.js";
 import { writeDelta } from "./delta.js";
 import { cloudSync, mergedPreviews, oneAtATime, plan, upToDate } from "./live.js";
+import { unnamedIn } from "./name.js";
 import { coverageLine } from "./stories.js";
 
 export { comparable } from "@codesignflo/core";
@@ -141,11 +143,13 @@ async function syncOnce(args: string[], cloud: ReturnType<typeof cloudSession>):
   // at 1200 compared nothing).
   const sizes = cloud ? await designSizes(cloud) : {};
   const {
-    registry: auto,
+    registry: rendered,
     irs,
     images,
     failed,
     shots: shotsByStory,
+    dropped,
+    webFonts,
   } = await timed("sync.render", () => renderStorybook(resolve(sb.out ?? "storybook-static"), process.cwd(), sizes));
   // A story whose play function fails shows where it stopped (a modal on its first step instead of its
   // fourth): Live would show that. The story is the code's to fix.
@@ -155,15 +159,27 @@ async function syncOnce(args: string[], cloud: ReturnType<typeof cloudSession>):
         ? `! story ${story}: ${error} — left out of this update (a CoDesignFlo gap: report it); the rest went on`
         : `! story ${story}: its play function failed — ${error.split("\n")[0]} — Live shows the story where it stopped; fix the story (code to change), then sync`,
     );
+  // Text the page shows that the extractor didn't read: Live won't have it (a CoDesignFlo gap, not the code's).
+  for (const [story, texts] of dropped)
+    console.log(
+      `! story ${story}: text the page shows that Live won't have — ${texts
+        .slice(0, 4)
+        .map((t) => JSON.stringify(t.length > 40 ? `${t.slice(0, 40)}…` : t))
+        .join(", ")}${texts.length > 4 ? ` and ${texts.length - 4} more` : ""} (a CoDesignFlo gap, not code to change: tell the user)`,
+    );
+  // Web fonts the app loads: Figma draws Live in them only where they're installed (else it says which it swapped).
+  if (webFonts.length)
+    console.error(
+      `fonts the app loads from the web: ${webFonts.join(", ")} (each needs installing where Figma runs, to draw Live as the app)`,
+    );
+  // Examples that render differently from their variant are variants of their own (see splitExamples).
+  const auto = splitExamples(rendered, irs);
   const registry = auto as unknown as RegistryFile;
   writeFileSync(join(dir(), "registry.json"), `${JSON.stringify(auto, null, 2)}\n`);
   console.error(
     `${Object.keys(auto.components).length} components, ${Object.keys(auto.screens).length} screens, ${irs.size} stories rendered`,
   );
-  const unnamedCount = [...irs.values()].reduce((n, ir) => {
-    const walk = (x: IRNode): number => (x.unnamed ? 1 : 0) + (x.children ?? []).reduce((a, c) => a + walk(c), 0);
-    return n + walk(ir.root);
-  }, 0);
+  const unnamedCount = unnamedIn(auto, irs).length;
   if (unnamedCount) console.error(`${unnamedCount} element(s) without a semantic name — run: codesignflo name`);
   // Components without a story aren't components in Live (nor can they be linked to a design system).
   try {
@@ -194,10 +210,18 @@ async function syncOnce(args: string[], cloud: ReturnType<typeof cloudSession>):
     },
   });
   for (const [, error] of failed) record({ kind: "error", signature: `story play function failed: ${error.split("\n")[0]}`.slice(0, 200) });
+  // How much text the extractor drops (counts only: the words stay here).
+  if (dropped.size)
+    record({
+      kind: "gap",
+      signature: "text the page shows missing from Live",
+      data: { stories: dropped.size, texts: [...dropped.values()].flat().length },
+    });
   const tokens = tokenNames(dtcg);
+  const colours = tokenColours(dtcg);
   const { sets, screens } = await timed("sync.compile", () => ({
-    sets: compile(registry, irs, tokens),
-    screens: compileScreens({ ...registry, screens: registry.screens ?? {} }, irs, tokens),
+    sets: compile(registry, irs, tokens, colours),
+    screens: compileScreens({ ...registry, screens: registry.screens ?? {} }, irs, tokens, colours),
   }));
   if (args.includes("--dry-run")) {
     for (const [k, c] of Object.entries(auto.components)) {
@@ -244,6 +268,11 @@ async function syncOnce(args: string[], cloud: ReturnType<typeof cloudSession>):
     commit,
     keys,
     deliveries: deliveries(),
+    sources: Object.fromEntries(
+      [...Object.entries(auto.components), ...Object.entries(auto.screens ?? {})].flatMap(([key, e]) =>
+        e.files[0] ? [[key, e.files[0]]] : [],
+      ),
+    ),
     ...(only ? { only } : {}),
   };
   // A Live update also takes out the previews of branches merged since (their code is in Live now).
@@ -276,9 +305,32 @@ async function syncOnce(args: string[], cloud: ReturnType<typeof cloudSession>):
 
   let states: Map<string, ComponentState> | undefined;
   await withPlugin({ projectId: config.projectId }, async (s) => {
-    const r = await applyUpdate(s, cliStore, { ...input, images: Object.fromEntries(images) }, (line) => console.log(line));
-    states = r.states;
-    for (const n of r.notes) console.log(`! ${n}`);
+    // The designer's panel shows how far the update is, as it does for one from the service (an older plugin
+    // doesn't know the call: it just shows nothing, as before).
+    const tell = (p: { done: number; total: number; item?: string; finished?: boolean; ok?: boolean }) =>
+      void s.call("updateProgress", p, { timeoutMs: 10_000 }).catch(() => undefined);
+    const total = (
+      input.only
+        ? [...sets, ...screens.map((x) => x.spec)].filter((x) => input.only!.includes(x.k.replace(/^screen:/, "")))
+        : [...sets, ...screens]
+    ).length;
+    tell({ done: 0, total });
+    let ok = false;
+    try {
+      const r = await applyUpdate(
+        s,
+        cliStore,
+        { ...input, images: Object.fromEntries(images) },
+        (line) => console.log(line),
+        (done, all, item) => tell({ done, total: all, item }),
+      );
+      states = r.states;
+      for (const n of r.notes) console.log(`! ${n}`);
+      ok = true;
+    } finally {
+      // Awaited: the connection closes right after, and the panel would take that for a sync that stopped.
+      await s.call("updateProgress", { done: total, total, finished: true, ok }, { timeoutMs: 10_000 }).catch(() => undefined);
+    }
   });
   if (states) writeFileSync(join(dir(), "STATUS.md"), status(states, registry));
   writeFileSync(statePath(), `${JSON.stringify({ lastSyncCommit: commit }, null, 2)}\n`);

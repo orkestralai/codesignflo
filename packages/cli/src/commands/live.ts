@@ -12,6 +12,7 @@ import { affectsRender, behind, branch, changedSince, contains, defaultBranch, d
 import { type cloudSession, dir, readConfig, readLedger } from "../project.js";
 import type { RenderSetup } from "../render/render.js";
 import { branchName, projectId as safeProjectId } from "../safe.js";
+import { savedSignIn } from "../service/client.js";
 import { timed } from "../telemetry.js";
 import { proposalChecks } from "./pull.js";
 
@@ -391,7 +392,10 @@ const expired = (m: string) => /jwt|expired|token/i.test(m);
  * applied and say how it went — built, closed, removed, and where Live still differs from the app. A big
  * update takes a while: waits while the plugin keeps making progress (up to 30 minutes), 5 without any.
  */
-async function reportApplied(cloud: Cloud, id: number) {
+async function reportApplied(start_: Cloud, id: number) {
+  let cloud = start_;
+  // A ticket's sign-in can run out while waiting (it can't be renewed): this machine's own sign-in takes over.
+  let switched = false;
   const { data: seen } = await cloud.client
     .from("plugin_presence")
     .select("seen_at, file_name")
@@ -414,6 +418,14 @@ async function reportApplied(cloud: Cloud, id: number) {
   while (Date.now() - start < 60 * 60_000 && Date.now() - moved < QUIET) {
     await new Promise((r) => setTimeout(r, 3000));
     const { data, error } = await cloud.client.from("live_updates").select("status, log, progress, taken_at").eq("id", id).single();
+    if (error && expired(error.message) && !switched) {
+      switched = true;
+      const own = await savedSignIn().catch(() => null);
+      if (own) {
+        cloud = { ...cloud, client: own };
+        continue;
+      }
+    }
     if (error) {
       console.log(
         expired(error.message)

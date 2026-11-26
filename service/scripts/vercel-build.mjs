@@ -32,6 +32,7 @@ export const PATHS = [
   "api/demo/quit",
   "api/demo/tick",
   "api/mcp-request",
+  "api/plugin",
   ".well-known/oauth-protected-resource",
   ".well-known/oauth-protected-resource/mcp",
   ".well-known/oauth-authorization-server",

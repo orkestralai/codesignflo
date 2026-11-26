@@ -64,7 +64,9 @@ export const handlers: Record<string, Handler> = {
     return out;
   },
   exportVariants: (p: { setKeys?: string[] }) => executor.exportVariants(p),
-  exportNode: (p: { k?: string; id?: string }) => executor.exportNode(p),
+  /** A developer's sync telling the panel how far its update is (the panel shows it; nothing to do here). */
+  updateProgress: async () => null,
+  exportNode: (p: { k?: string; id?: string; width?: number }) => executor.exportNode(p),
   applyOps: (p: Parameters<typeof applyOps>[0]) => applyOps(p),
   readFacts: async () => ({
     meta: meta(),

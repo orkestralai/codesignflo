@@ -19,10 +19,11 @@
         "fills": ["#ffffff"],
         "strokes": [],
         "strokesIncludedInLayout": false,
+        "clipsContent": false,
         "cornerRadius": 0,
         "opacity": 1,
-        "clipsContent": false,
-        "effects": []
+        "effects": [],
+        "blendMode": "PASS_THROUGH"
       },
       "paintBind": {
         "fills": "color/surface/default"
@@ -48,10 +49,11 @@
             "fills": ["#f4f4f5"],
             "strokes": [],
             "strokesIncludedInLayout": false,
+            "clipsContent": false,
             "cornerRadius": 0,
             "opacity": 1,
-            "clipsContent": false,
-            "effects": []
+            "effects": [],
+            "blendMode": "PASS_THROUGH"
           },
           "bind": {
             "paddingTop": "space/3",
@@ -84,7 +86,12 @@
                   "value": 0
                 },
                 "fills": ["#4f46e5"],
-                "textAutoResize": "WIDTH_AND_HEIGHT"
+                "textAutoResize": "WIDTH_AND_HEIGHT",
+                "textDecoration": "NONE",
+                "hyperlink": null,
+                "opacity": 1,
+                "effects": [],
+                "blendMode": "PASS_THROUGH"
               },
               "bind": {
                 "fontSize": "font/size/lg"
@@ -148,10 +155,11 @@
             "fills": [],
             "strokes": [],
             "strokesIncludedInLayout": false,
+            "clipsContent": false,
             "cornerRadius": 0,
             "opacity": 1,
-            "clipsContent": false,
-            "effects": []
+            "effects": [],
+            "blendMode": "PASS_THROUGH"
           },
           "bind": {
             "itemSpacing": "space/4",
@@ -183,7 +191,12 @@
                   "value": 0
                 },
                 "fills": ["#18181b"],
-                "textAutoResize": "WIDTH_AND_HEIGHT"
+                "textAutoResize": "WIDTH_AND_HEIGHT",
+                "textDecoration": "NONE",
+                "hyperlink": null,
+                "opacity": 1,
+                "effects": [],
+                "blendMode": "PASS_THROUGH"
               },
               "bind": {
                 "fontSize": "font/size/lg"
@@ -215,10 +228,11 @@
                 "fills": [],
                 "strokes": [],
                 "strokesIncludedInLayout": false,
+                "clipsContent": false,
                 "cornerRadius": 0,
                 "opacity": 1,
-                "clipsContent": false,
-                "effects": []
+                "effects": [],
+                "blendMode": "PASS_THROUGH"
               },
               "bind": {
                 "gridColumnGap": "space/4",

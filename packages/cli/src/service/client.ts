@@ -143,6 +143,21 @@ export async function ticketProject(): Promise<string | null> {
  * MCP hands the agent a command to run, as the user of its one-time ticket (CODESIGNFLO_TICKET) or, from older
  * MCP servers, of a short-lived token (CODESIGNFLO_TOKEN). Nothing is saved for those.
  */
+/**
+ * This machine's own sign-in (login, or the git hook's), renewed and saved again; null without one. A command
+ * run with a ticket uses it when the ticket's sign-in runs out (it can't be renewed): a sync waiting for Figma
+ * stopped after a few minutes with "the sign-in for this command expired".
+ */
+export async function savedSignIn(): Promise<SupabaseClient | null> {
+  if (!existsSync(sessionFile)) return null;
+  const saved = JSON.parse(readFileSync(sessionFile, "utf8")) as { refresh_token: string };
+  const client = anonClient();
+  const { data, error } = await client.auth.refreshSession({ refresh_token: saved.refresh_token });
+  if (error || !data.session || !data.user) return null;
+  saveSession(data.session.refresh_token, { id: data.user.id, email: data.user.email ?? null });
+  return client;
+}
+
 export async function signedIn(): Promise<{ client: SupabaseClient; user: { id: string; email?: string | null } }> {
   const { CODESIGNFLO_TICKET: ticket, CODESIGNFLO_MCP: mcp } = process.env;
   const token = ticket && mcp ? (await redeemTicket(ticket, mcp)).token : process.env.CODESIGNFLO_TOKEN;

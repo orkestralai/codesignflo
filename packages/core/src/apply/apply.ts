@@ -20,6 +20,7 @@ import { canonicalize, type Raw, stringify } from "../snapshot/canonical.js";
 import { type SystemUse, systemUses } from "../system/system.js";
 import { hash } from "../util/hash.js";
 import { stableStringify } from "../util/stable.js";
+import { alikeNote, type PropCheck, type PropDifference, propDifferenceLine, type StyleSignals, signalDifferences } from "./check.js";
 import { deltaFor, withDataTags } from "./delta.js";
 import { designerText } from "./instructions.js";
 import { predictLive } from "./predict.js";
@@ -31,26 +32,35 @@ type Stats = {
   moved: number;
   writes: Record<string, number>;
   errors: string[];
-  differs?: { k: string; figma: [number, number]; app: [number, number]; why?: string; at?: true }[];
-  score?: { before: number; after: number; checked: number };
+  differs?: { k: string; figma: [number, number]; app: [number, number]; why?: string; at?: true; inFlow?: true; alike?: number }[];
+  score?: { before: number; after: number; checked: number; skipped?: number };
+  /** Properties that differ from the browser's (colours, fonts, text, padding…), the most visible first. */
+  props?: PropDifference[];
+  /** How many properties were checked, on how many layers, and how many differ. */
+  propCheck?: PropCheck;
   fitted?: string[];
   anchored?: boolean;
   pairing?: { paired: number; layers: number };
   designMatch?: { now: number; was?: number };
+  signals?: { design: StyleSignals; app: StyleSignals };
 };
 
 /** "Grid-Item-0 › Card-Top: 120×600 in Figma, 514×240 in the app (why)" — where Live differs from the browser. */
 function differenceLines(root: string, s: Stats): string[] {
-  return (s.differs ?? []).map((d) => {
-    const path =
-      d.k
-        .slice(root.length + 1)
-        .split("/")
-        .join(" › ") || "(the whole thing)";
-    if (d.at)
-      return `${path}: at ${d.figma[0]},${d.figma[1]} in Figma, ${d.app[0]},${d.app[1]} in the app (placed elsewhere${s.anchored ? "" : " — rebuilt next update"})`;
-    return `${path}: ${d.figma[0]}×${d.figma[1]} in Figma, ${d.app[0]}×${d.app[1]} in the app${d.why ? ` (${d.why})` : ""}`;
-  });
+  return (s.differs ?? [])
+    .map((d) => {
+      const path =
+        d.k
+          .slice(root.length + 1)
+          .split("/")
+          .join(" › ") || "(the whole thing)";
+      if (d.inFlow)
+        return `${path}: at ${d.figma[0]},${d.figma[1]} in its parent in Figma, ${d.app[0]},${d.app[1]} in the app (placed elsewhere in its row or column${d.why ? `: ${d.why}` : ""})${alikeNote(d.alike)}`;
+      if (d.at)
+        return `${path}: at ${d.figma[0]},${d.figma[1]} in Figma, ${d.app[0]},${d.app[1]} in the app (placed elsewhere${s.anchored ? "" : " — rebuilt next update"})${alikeNote(d.alike)}`;
+      return `${path}: ${d.figma[0]}×${d.figma[1]} in Figma, ${d.app[0]}×${d.app[1]} in the app${d.why ? ` (${d.why})` : ""}${alikeNote(d.alike)}`;
+    })
+    .concat((s.props ?? []).map((d) => propDifferenceLine(root, d)));
 }
 export type Proposal = {
   nodeId: string;
@@ -101,6 +111,8 @@ export type UpdateInput = {
   commit: string;
   /** Component and page keys in the code now (the index lists these, plus new designs). */
   keys: string[];
+  /** Component and page key → its source file (relative to the app), named where the app differs from the design. */
+  sources?: Record<string, string>;
   deliveries: Delivery[];
   /**
    * Pictures by content hash, base64 (PNG or JPEG). A local sync sends them; through the service they're in
@@ -259,9 +271,10 @@ export async function applyUpdate(
     if (s.score) {
       const fitted = s.fitted ?? [];
       scoreBy[key] = { score: s.score.after, fitted: fitted.length };
-      if (fitted.length || s.score.after < 100)
+      const pc = s.propCheck;
+      if (fitted.length || s.score.after < 100 || pc?.differ)
         log(
-          `${key}: ${s.score.after}% of ${s.score.checked} layers match the app${fitted.length ? ` (${s.score.before}% as built; ${fitted.length} fitted to it)` : ""}`,
+          `${key}: ${s.score.after}% of ${s.score.checked} layers match the app${fitted.length ? ` (${s.score.before}% as built; ${fitted.length} fitted to it)` : ""}${s.score.skipped ? ` (${s.score.skipped} not checked: Library components or layers the page didn't measure)` : ""}${pc ? `; ${pc.checked - pc.differ} of ${pc.checked} properties on ${pc.layers} layers match` : ""}`,
         );
       if (fitted.length) {
         const paths = fitted.map(
@@ -295,11 +308,20 @@ export async function applyUpdate(
       notes.push(
         `${key}: only ${s.pairing.paired} of the design's ${s.pairing.layers} layers are found in the app — for the developer, code to change: name the page's elements after the design's layers (call pair_design for this page), so changes and differences follow them`,
       );
-    const lines = differenceLines(root, s);
+    // The look as a whole (gradients, glows, corners, spacing, columns), where it's clearly apart from the design's.
+    // On a page built on the design that's code to change; otherwise the match above already says the app went
+    // its own way, and this says how (not a CoDesignFlo gap: it isn't Live against the app).
+    const style = s.signals ? signalDifferences(s.signals.design, s.signals.app) : [];
+    const look = style.length ? `the look as a whole: ${style.join("; ")}` : "";
+    if (look && !s.anchored) log(`${key}: unlike the designer's design in ${look.slice(4)}`);
+    const lines = [...(look && s.anchored ? [look] : []), ...differenceLines(root, s)];
     if (!lines.length) return;
     differsBy[key] = lines;
-    // Built on the design: where it differs from the browser, the app differs from the design.
-    for (const l of lines) notes.push(`${key}: ${s.anchored ? "the app differs from the design" : "differs from the app"} — ${l}`);
+    // Built on the design: where it differs from the browser, the app differs from the design — code to change,
+    // in the page's or component's source file.
+    const file = s.anchored ? input.sources?.[key] : undefined;
+    for (const l of lines)
+      notes.push(`${key}: ${s.anchored ? "the app differs from the design" : "differs from the app"} — ${l}${file ? ` [${file}]` : ""}`);
   };
 
   // 2. Protect hand edits — for every component before any is updated: updating one changes the

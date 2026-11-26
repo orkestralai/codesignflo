@@ -334,6 +334,16 @@ export class Cloud {
     return body;
   }
 
+  /**
+   * This file was just linked to a project: its latest Live comes again (the update was applied already, in
+   * another file, and the new file stayed empty until the developer's next sync). False when there's nothing to
+   * send or one is on its way; a service without resend_live yet: false too.
+   */
+  async resendLive(projectId: string): Promise<boolean> {
+    if (!(await this.ready())) return false;
+    return this.rpc<boolean>("resend_live", { p_project: projectId }, true).catch(() => false);
+  }
+
   /** My projects: which have their code, and which already use a Figma file. */
   async myProjects(): Promise<{ project_id: string; name: string; role: string; has_code: boolean; file_name: string | null }[]> {
     if (!this.user || !(await this.ready())) return [];
@@ -532,9 +542,20 @@ export class Cloud {
     if (!(await this.ready())) return;
     // Whether Figma is in the background (the developer is told to bring it to the front); a service without
     // that parameter yet gets the progress alone.
-    await this.rpc("update_progress", { p_id: id, p_done: done, p_total: total, p_item: item, p_background: background }, true).catch(() =>
-      this.rpc("update_progress", { p_id: id, p_done: done, p_total: total, p_item: item }, true),
-    );
+    await this.rpc("update_progress", { p_id: id, p_done: done, p_total: total, p_item: item, p_background: background }, true)
+      .catch(() => this.rpc("update_progress", { p_id: id, p_done: done, p_total: total, p_item: item }, true))
+      .then(
+        () => {
+          this.reportRefused = null;
+        },
+        (e: Error) => {
+          // Refused reports used to vanish: the panel looked frozen and nobody could tell why (the service
+          // answered 400 to every report of an update it had handed to this very plugin). Kept and shown.
+          if (this.reportRefused !== e.message) console.warn(`CoDesignFlo: the service refused progress for update ${id}: ${e.message}`);
+          this.reportRefused = e.message;
+          this.changed();
+        },
+      );
   }
   /**
    * Records how applying went. A big update can outlast the sign-in it started with (ready() renews it), and
@@ -550,10 +571,13 @@ export class Cloud {
         return;
       } catch (e) {
         last = e;
+        console.warn(`CoDesignFlo: the service refused to record update ${id} as ${ok ? "applied" : "failed"}: ${(e as Error).message}`);
       }
     }
     throw last;
   }
+  /** Why the service refuses this plugin's reports on the update it's applying (null: it doesn't). */
+  reportRefused: string | null = null;
   /** Writes queued events now (applying an update waits for its history to be saved). */
   async saved() {
     await this.flush();

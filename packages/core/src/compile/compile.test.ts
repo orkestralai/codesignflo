@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fixture, fixtureDir } from "../test-fixtures.js";
-import { compile, compileScreens, type Registry, tokenNames } from "./compile.js";
+import { compile, compileScreens, type Registry, splitExamples, tokenNames } from "./compile.js";
 import type { IRStory } from "./ir.js";
 
 const registry = fixture<Registry & { screens: Record<string, string> }>("s4/registry.json");
@@ -361,5 +361,131 @@ describe("an icon component (a story whose root is an <svg>)", () => {
       expect(v.props).toMatchObject({ width: size, height: size });
       expect(v.children?.map((c) => [c.type, c.k])).toEqual([["SVG", `${v.k}/svg`]]);
     }
+  });
+});
+
+describe("examples that look different (splitExamples)", () => {
+  const card = (border: string, title: string) => ({
+    type: "FRAME",
+    name: "card",
+    width: 300,
+    height: 100,
+    sizing: { w: "fixed", h: "fixed" },
+    stroke: { color: { value: border }, width: 1 },
+    children: [
+      {
+        type: "TEXT",
+        name: "title",
+        width: 100,
+        height: 20,
+        sizing: { w: "hug", h: "hug" },
+        text: {
+          characters: title,
+          fontFamily: "Inter",
+          fontWeight: { value: 600 },
+          fontSize: { value: 16 },
+          lineHeight: 20,
+          letterSpacing: 0,
+          color: { value: "#000000" },
+        },
+      },
+    ],
+  });
+  const irs = new Map([
+    ["plan--team", { story: "plan--team", root: card("#0f766e", "Team") }],
+    ["plan--long-title", { story: "plan--long-title", root: card("#0f766e", "Team, with a much longer name") }],
+    ["plan--free", { story: "plan--free", root: card("#e2e8f0", "Starter") }],
+  ]) as never;
+  const registry = {
+    components: {
+      plan: {
+        module: "PricingCard",
+        stories: { "plan--team": { billing: "monthly" } },
+        examples: { "plan--long-title": "plan--team", "plan--free": "plan--team" },
+      },
+    },
+  };
+
+  it("makes an example that renders differently a variant of its own, told apart by story", () => {
+    const out = splitExamples(registry, irs).components.plan!;
+    expect(out.stories).toEqual({
+      "plan--team": { billing: "monthly", story: "team" },
+      "plan--free": { billing: "monthly", story: "free" },
+    });
+    // Other data only (a longer title): still an example of its variant.
+    expect(out.examples).toEqual({ "plan--long-title": "plan--team" });
+  });
+
+  it("leaves a component whose examples differ only in data as it was", () => {
+    const same = { components: { plan: { ...registry.components.plan, examples: { "plan--long-title": "plan--team" } } } };
+    expect(splitExamples(same, irs)).toEqual(same);
+  });
+});
+
+describe("colours bound to tokens only when the browser drew the token's colour", () => {
+  const dtcg = {
+    color: {
+      status: { success: { border: { $value: "#a7f3d0" }, surface: { $value: "#ecfdf5" } } },
+      brand: { $value: "{color.status.success.surface}" },
+    },
+  };
+  const page = (stroke: string, fill: string) => {
+    const zero = { value: 0 };
+    return {
+      type: "FRAME",
+      name: "page",
+      width: 200,
+      height: 100,
+      sizing: { w: "fixed", h: "fixed" },
+      layout: { direction: "VERTICAL", gap: zero, padding: [zero, zero, zero, zero], align: "MIN", justify: "MIN" },
+      fill: { value: fill, token: "color-brand" },
+      stroke: { color: { value: stroke, token: "color-status-success-border" }, width: 1 },
+      children: [],
+    };
+  };
+  const build = async (stroke: string, fill: string, withColours = true) => {
+    const { compileScreens, tokenColours } = await import("./compile.js");
+    const irs = new Map([["page--default", { story: "page--default", root: page(stroke, fill) }]]) as never;
+    const [screen] = compileScreens(
+      { components: {}, screens: { "pages.page": { story: "page--default" } } } as never,
+      irs,
+      tokenNames(dtcg),
+      withColours ? tokenColours(dtcg) : undefined,
+    );
+    return (screen as unknown as { spec: { paintBind?: Record<string, string>; props: Record<string, unknown> } }).spec;
+  };
+  it("reads each colour token's value, aliases followed", async () => {
+    const { tokenColours } = await import("./compile.js");
+    const c = tokenColours(dtcg);
+    expect(c.get("color-status-success-border")).toMatchObject({ a: 1 });
+    expect(c.get("color-brand")).toEqual(c.get("color-status-success-surface"));
+  });
+  it("the page doesn't define the token (the browser drew transparent): the drawn colour, not the token's", async () => {
+    const spec = await build("#00000000", "#ecfdf5");
+    expect(spec.paintBind?.strokes).toBeUndefined();
+    expect(spec.props.strokes).toEqual(["#00000000"]);
+    // The fill is the token's colour (through an alias): bound.
+    expect(spec.paintBind?.fills).toBe("color/brand");
+  });
+  it("the same colour, give or take rounding: bound", async () => {
+    expect((await build("#a7f3d1", "#ecfdf5")).paintBind?.strokes).toBe("color/status/success/border");
+  });
+  it("without the tokens' values (older callers), bound as before", async () => {
+    expect((await build("#00000000", "#ecfdf5", false)).paintBind?.strokes).toBe("color/status/success/border");
+  });
+  it("a colour set without var(): bound when exactly one token has that value, not when two do", async () => {
+    const { compileScreens, tokenColours } = await import("./compile.js");
+    const bare = { ...page("#a7f3d0", "#ecfdf5"), fill: { value: "#ecfdf5" }, stroke: { color: { value: "#a7f3d0" }, width: 1 } };
+    const irs = new Map([["page--default", { story: "page--default", root: bare }]]) as never;
+    const [screen] = compileScreens(
+      { components: {}, screens: { "pages.page": { story: "page--default" } } } as never,
+      irs,
+      tokenNames(dtcg),
+      tokenColours(dtcg),
+    );
+    const spec = (screen as unknown as { spec: { paintBind?: Record<string, string> } }).spec;
+    // One token is #a7f3d0; #ecfdf5 is two (the surface and the brand alias to it).
+    expect(spec.paintBind?.strokes).toBe("color/status/success/border");
+    expect(spec.paintBind?.fills).toBeUndefined();
   });
 });

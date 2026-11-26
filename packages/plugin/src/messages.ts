@@ -27,6 +27,8 @@ export type GuidePrefs = {
   introHidden?: boolean;
   /** The demo's walkthrough: the step reached, and whether it was closed or finished. */
   tour?: { step: number; closed?: boolean };
+  /** A newer plugin announced, put away ("Later"): kept under "*" with that version, shown again for the next. */
+  pluginLater?: string;
 };
 
 export type PanelAction =
@@ -34,6 +36,8 @@ export type PanelAction =
   | "setUpFile"
   | "forgetProject"
   | "resetDemoFile"
+  | "clearFile"
+  | "fileContents"
   | "tourMark"
   | "demoShots"
   | "tourClear"

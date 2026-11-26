@@ -2,6 +2,7 @@
 // between Library components and the code's, the property mapping between them (`size=sm` ↔ `Size=Small`),
 // which Library variant draws a code variant, where a linked pair differs, token suggestions, and the code
 // components a design uses (for the developer's instructions). Pure: the plugin gathers the facts.
+import { deltaE, hexToRgba, SAME_COLOUR } from "../apply/check.js";
 import type { Raw } from "../snapshot/canonical.js";
 
 /** A component's variant properties and their values ("size" → ["sm", "md"]). */
@@ -210,7 +211,50 @@ export function codeProps(lib: Record<string, string>, map: PropMap): Record<str
 }
 
 /** What a variant looks like, for comparing a linked pair. */
-export type VariantLook = { props: Record<string, string>; w: number; h: number; radius?: number; fill?: string; font?: string };
+export type VariantLook = {
+  props: Record<string, string>;
+  w: number;
+  h: number;
+  radius?: number;
+  fill?: string;
+  font?: string;
+  /** Its border: colour and width. */
+  stroke?: { color: string; width: number };
+  /** Its shadow, in words ("0 4 12"): offset x, y and blur of the first. */
+  shadow?: string;
+  /** Padding (top, right, bottom, left) and gap, when it lays out its content. */
+  padding?: [number, number, number, number];
+  gap?: number;
+  /** The colour of its (first) text. */
+  textColor?: string;
+};
+
+/** Colours that look the same (ΔE under 2.3) aren't a difference; "#abc" vs "#abd" isn't one. */
+const sameColour = (a: string, b: string) => {
+  const x = hexToRgba(a.slice(0, 7));
+  const y = hexToRgba(b.slice(0, 7));
+  return x && y ? deltaE(x, y) < SAME_COLOUR : a.toLowerCase() === b.toLowerCase();
+};
+
+/**
+ * A link between the code's component and the designer's that no longer holds: a Library property or value it
+ * maps to that's gone (renamed or removed in Figma), or a code property it maps that the code no longer has.
+ */
+export function lintLink(code: VariantLook[], lib: VariantLook[], map: PropMap): string[] {
+  const out: string[] = [];
+  const libProps = new Set(lib.flatMap((l) => Object.keys(l.props)));
+  const codeProps = new Set(code.flatMap((c) => Object.keys(c.props)));
+  for (const [p, q] of Object.entries(map.props)) {
+    if (!codeProps.has(p)) out.push(`the code has no ${p} any more (linked to your ${q})`);
+    if (!libProps.has(q)) {
+      out.push(`your Library has no ${q} any more (the code's ${p} is linked to it): renamed? link the component again`);
+      continue;
+    }
+    for (const [v, lv] of Object.entries(map.values[p] ?? {}))
+      if (!lib.some((l) => l.props[q] === lv)) out.push(`your Library has no ${q}=${lv} any more (the code's ${p}=${v} shows it)`);
+  }
+  return out;
+}
 
 /**
  * Where the designer's component differs from what the code draws, per code variant (option (a): Live shows
@@ -239,8 +283,17 @@ export function compareComponents(code: VariantLook[], lib: VariantLook[], map: 
       parts.push(`${Math.round(l.w)}×${Math.round(l.h)} in your Library, ${Math.round(c.w)}×${Math.round(c.h)} in the app`);
     if (c.radius !== undefined && l.radius !== undefined && Math.abs(c.radius - l.radius) > 0.5)
       parts.push(`corners ${l.radius} vs ${c.radius}`);
-    if (c.fill && l.fill && c.fill.toLowerCase() !== l.fill.toLowerCase()) parts.push(`fill ${l.fill} vs ${c.fill}`);
+    if (c.fill && l.fill && !sameColour(c.fill, l.fill)) parts.push(`fill ${l.fill} vs ${c.fill}`);
     if (c.font && l.font && c.font !== l.font) parts.push(`font ${l.font} vs ${c.font}`);
+    if (c.textColor && l.textColor && !sameColour(c.textColor, l.textColor)) parts.push(`text colour ${l.textColor} vs ${c.textColor}`);
+    if (!!c.stroke !== !!l.stroke)
+      parts.push(l.stroke ? `a border in your Library, none in the app` : `no border in your Library, one in the app`);
+    else if (c.stroke && l.stroke && (!sameColour(c.stroke.color, l.stroke.color) || Math.abs(c.stroke.width - l.stroke.width) > 0.5))
+      parts.push(`border ${l.stroke.color} ${l.stroke.width} vs ${c.stroke.color} ${c.stroke.width}`);
+    if ((c.shadow ?? "") !== (l.shadow ?? "")) parts.push(`shadow ${l.shadow ?? "none"} vs ${c.shadow ?? "none"}`);
+    if (c.padding && l.padding && c.padding.some((x, i) => Math.abs(x - l.padding![i]!) > 1))
+      parts.push(`padding ${l.padding.join(" ")} vs ${c.padding.join(" ")}`);
+    if (c.gap !== undefined && l.gap !== undefined && Math.abs(c.gap - l.gap) > 1) parts.push(`gap ${l.gap} vs ${c.gap}`);
     if (parts.length) out.push(`${words(c.props)}: ${parts.join("; ")}`);
   }
   // Code properties the Library component has nothing for: every value of it shows the same Library variant.
@@ -248,6 +301,7 @@ export function compareComponents(code: VariantLook[], lib: VariantLook[], map: 
     (p) => !map.props[p] && new Set(code.map((c) => c.props[p])).size > 1,
   );
   if (unmapped.length) out.unshift(`nothing for ${unmapped.join(", ")} in your Library — its versions all show the same variant`);
+  out.unshift(...lintLink(code, lib, map));
   if (unsupported.length)
     out.unshift(
       `no Library variant for ${unsupported.slice(0, 4).join(" / ")}${unsupported.length > 4 ? ` (+${unsupported.length - 4})` : ""} — pages use the code's version there`,

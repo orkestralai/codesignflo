@@ -3,17 +3,27 @@
 // read-compared-written; the returned stats count actual writes, so a no-op run reports zeros.
 // Ported from spikes S4/S7 (11/11 and 8/8 checks in real Figma).
 import {
+  colourSeverity,
+  countLook,
+  deltaE,
   hash,
+  hexToRgba,
   LAYOUT,
   type LaneDesign,
   mapVariant,
   NODE,
   NS,
+  noSignals,
+  offBy,
+  type PropCheck,
+  type PropDifference,
   parseTokenColor,
   parseVariant,
   type SpecNode,
+  type StyleSignals,
   specChanges,
   specsByKey,
+  worstFirst,
 } from "@codesignflo/core";
 import { DS, type LibraryLinks, linksSignature, loadLinks, tokenLinks } from "./designsystem.js";
 import {
@@ -42,8 +52,12 @@ type Stats = {
   errors: string[];
   /** Layers whose size in Figma differs from the browser's (after building), with a likely reason. */
   differs?: Difference[];
-  /** Share of measured layers matching the app, before and after fitting (0–100), and how many were checked. */
-  score?: { before: number; after: number; checked: number };
+  /**
+   * Share of measured layers matching the app, before and after fitting (0–100), how many were checked, and how
+   * many weren't (the designer's Library components, layers the page didn't measure): a score of 100% means
+   * 100% of `checked`, not of everything.
+   */
+  score?: { before: number; after: number; checked: number; skipped?: number };
   /** Layers fitted to the app's size or place after building (CoDesignFlo gaps: the build alone was off). */
   fitted?: string[];
   /** Live is built on the designer's design: its differences from the app are the app's, not CoDesignFlo's. */
@@ -52,8 +66,27 @@ type Stats = {
   pairing?: { paired: number; layers: number };
   /** How closely the app follows the designer's design (%), and last time. */
   designMatch?: { now: number; was?: number };
+  /** The page's look as a whole, the designer's design against the app (see StyleSignals). */
+  signals?: { design: StyleSignals; app: StyleSignals };
+  /** Properties that differ from the browser's (colours, fonts, text, padding…), the most visible first. */
+  props?: PropDifference[];
+  /** How many properties were checked, on how many layers, and how many differ. */
+  propCheck?: PropCheck;
 };
-export type Difference = { k: string; figma: [number, number]; app: [number, number]; why?: string; at?: true };
+/**
+ * A layer whose size differs from the app's, or its place: `at` for absolute layers (x, y in its parent),
+ * `inFlow` for layers laid out by auto layout (x, y in the nearest measured parent; reported, not fitted).
+ */
+export type Difference = {
+  k: string;
+  figma: [number, number];
+  app: [number, number];
+  why?: string;
+  at?: true;
+  inFlow?: true;
+  /** Other layers that differ the same way (the same layer in 12 cards): one cause, reported once. */
+  alike?: number;
+};
 const newStats = (): Stats => ({ created: 0, deleted: 0, moved: 0, writes: {}, errors: [] });
 const wrote = (s: Stats, prop: string) => (s.writes[prop] = (s.writes[prop] ?? 0) + 1);
 
@@ -578,7 +611,9 @@ async function writeRuns(t: TextNode, spec: SpecNode, stats: Stats) {
       }
       if (r.fontSize !== undefined) t.setRangeFontSize(r.start, end, r.fontSize);
       if (r.fill) t.setRangeFills(r.start, end, paints([r.fill]));
-      if (r.underline !== undefined) t.setRangeTextDecoration(r.start, end, r.underline ? "UNDERLINE" : "NONE");
+      if (r.underline !== undefined || r.strikethrough !== undefined)
+        t.setRangeTextDecoration(r.start, end, r.strikethrough ? "STRIKETHROUGH" : r.underline ? "UNDERLINE" : "NONE");
+      if (r.link !== undefined) t.setRangeHyperlink(r.start, end, r.link ? { type: "URL", value: r.link } : null);
     } catch (e) {
       stats.errors.push(`${spec.k}: styled text ${r.start}–${end}: ${String(e)}`);
     }
@@ -841,6 +876,42 @@ async function applyProps(node: SceneNode, spec: SpecNode, stats: Stats, full = 
   }
 }
 
+/**
+ * A drawing as layers. Figma's SVG import refuses some markup (filters, masks, foreignObject, embedded styles): tried
+ * again without them, so the drawing's shapes are kept, only those effects lost.
+ */
+function svgNode(svg: string): FrameNode {
+  try {
+    return figma.createNodeFromSvg(svg);
+  } catch (first) {
+    const plain = svg
+      .replace(/<(filter|mask|clipPath|pattern|foreignObject|style|script)\b[\s\S]*?<\/\1>/g, "")
+      .replace(/\s(filter|mask|clip-path|style)="[^"]*"/g, "");
+    if (plain === svg) throw first;
+    return figma.createNodeFromSvg(plain);
+  }
+}
+
+/**
+ * Where a layer couldn't be built: an empty frame its size, outlined in dashed red and named so, keyed as the layer
+ * so the next update tries again. The rest of the component or page is built as usual.
+ */
+function placeholder(spec: SpecNode, index: Map<string, SceneNode>, stats: Stats): FrameNode {
+  const f = figma.createFrame();
+  f.name = `${spec.name} (couldn't build)`;
+  f.fills = [];
+  f.strokes = [{ type: "SOLID", color: { r: 0.9, g: 0.2, b: 0.2 } }];
+  f.dashPattern = [4, 4];
+  const w = spec.measured?.w ?? (spec.props.width as number | undefined) ?? 24;
+  const h = spec.measured?.h ?? (spec.props.height as number | undefined) ?? 24;
+  f.resize(Math.max(1, w), Math.max(1, h));
+  tag(f, spec.k);
+  f.setSharedPluginData(NS, "broken", "1");
+  index.set(spec.k, f);
+  stats.created++;
+  return f;
+}
+
 async function create(spec: SpecNode, index: Map<string, SceneNode>, stats: Stats): Promise<SceneNode> {
   let n: SceneNode;
   switch (spec.type) {
@@ -858,7 +929,7 @@ async function create(spec: SpecNode, index: Map<string, SceneNode>, stats: Stat
       n = figma.createRectangle();
       break;
     case "SVG":
-      n = figma.createNodeFromSvg(spec.svg!);
+      n = svgNode(spec.svg!);
       scaleSvgStrokes(n as FrameNode, spec.svg!);
       n.setSharedPluginData(NS, "svgHash", svgHash(spec.svg!));
       break;
@@ -1089,14 +1160,24 @@ async function reconcileChildren(parent: SceneNode & ChildrenMixin, specs: SpecN
       stats.deleted++;
       node = undefined;
     }
-    if (node && !keep && s.type !== node.type && !(s.type === "SVG" && node.type === "FRAME")) {
+    const broken = !!node && node.getSharedPluginData(NS, "broken") === "1";
+    if (node && !keep && (broken || (s.type !== node.type && !(s.type === "SVG" && node.type === "FRAME")))) {
       node.remove();
       index.delete(s.k);
       stats.deleted++;
       node = undefined;
     }
     if (!node) node = renamed(parent.children[i], s, wanted, index, stats);
-    if (!node) node = await create(s, index, stats);
+    // One layer that can't be built (markup Figma refuses, a missing main component, a value it rejects) doesn't
+    // stop the component or page: it's left as a placeholder and reported, and the rest is built.
+    try {
+      if (!node) node = await create(s, index, stats);
+    } catch (e) {
+      stats.errors.push(
+        `${s.k}: couldn't build ${s.type === "SVG" ? "the drawing" : s.type.toLowerCase()}, left a placeholder: ${String(e)}`,
+      );
+      node = placeholder(s, index, stats);
+    }
     if (node.parent !== parent || parent.children.indexOf(node) !== i) {
       const wasHere = node.parent === parent;
       // Never past the end: a layer that left an earlier place here (another spec child took it) would make
@@ -1109,7 +1190,12 @@ async function reconcileChildren(parent: SceneNode & ChildrenMixin, specs: SpecN
       parent.insertChild(at, node);
       if (wasHere) stats.moved++;
     }
-    await reconcileNode(node, s, index, stats);
+    if (node.getSharedPluginData(NS, "broken") === "1") continue;
+    try {
+      await reconcileNode(node, s, index, stats);
+    } catch (e) {
+      stats.errors.push(`${s.k}: couldn't finish this layer: ${String(e)}`);
+    }
   }
   // Owned (keyed) children that are no longer in the spec, or a second layer with a key the spec has (only the
   // one the update just placed is it: an older one with the same key was left over and drawn twice).
@@ -1641,17 +1727,32 @@ async function swapInstances(from: ComponentNode, to: ComponentNode) {
  * a likely reason where CoDesignFlo can tell.
  */
 type Found = Difference & { size: number };
-/** Every layer whose size (or place, for absolute layers) differs from the app's, and how many were checked. */
-function measure(spec: SpecNode, index: Map<string, SceneNode>, stats: Stats): { found: Found[]; checked: number } {
+/**
+ * Every layer whose size or place differs from the app's, and how many were checked. Places: absolute layers
+ * where they sit in their parent; layers in auto layout where they sit in the nearest measured parent — only
+ * while nothing before them in that parent (nor the parent) is off already, since a sibling that grew pushes
+ * the ones after it (that sibling is the difference to report, not each one it moved).
+ */
+function measure(spec: SpecNode, index: Map<string, SceneNode>, stats: Stats): { found: Found[]; checked: number; skipped: number } {
   let checked = 0;
+  let skipped = 0;
   const off = (a: number, b: number) => Math.abs(a - b) > Math.max(2, 0.03 * Math.max(a, b));
   const fontMissing = stats.errors.some((e) => e.startsWith("font missing"));
   const found: Found[] = [];
-  const walk = (s0: SpecNode) => {
+  type Ref = { fig: [number, number]; app: [number, number] };
+  const absOf = (n: SceneNode): [number, number] => [n.absoluteTransform[0][2], n.absoluteTransform[1][2]];
+  /** Checks a layer and what's in it; true when its own box (size or place) is off. */
+  const walk = (s0: SpecNode, ref: Ref | null, disturbed: boolean): boolean => {
     const n = index.get(s0.k);
     const s = follow(s0, n);
     // The designer's component, as they made it: not measured against the app (its differences are the pair's).
-    if (n && n.type === "INSTANCE" && n.getSharedPluginData(NS, DS.lib)) return;
+    if (n && n.type === "INSTANCE" && n.getSharedPluginData(NS, DS.lib)) {
+      skipped++;
+      return false;
+    }
+    let mine = false;
+    // A layer the page drew but didn't measure (margins are spacers, sized by their parent: not counted).
+    if (!s.measured && n && s.type !== "COMPONENT_SET" && s.type !== "COMPONENT" && !/-margin(-top|-left)?$/.test(s.name)) skipped++;
     if (s.measured && n && "width" in n && s.type !== "COMPONENT_SET") {
       checked++;
       const [w, h] = [Math.round(n.width), Math.round(n.height)];
@@ -1660,6 +1761,7 @@ function measure(spec: SpecNode, index: Map<string, SceneNode>, stats: Stats): {
       const hugs = s.type === "TEXT" && s.props.textAutoResize === "WIDTH_AND_HEIGHT";
       const wOff = hugs ? w > s.measured.w + Math.max(2, 0.03 * s.measured.w) : off(w, s.measured.w);
       if (wOff || off(h, s.measured.h)) {
+        mine = true;
         const unset = stats.errors.some((e) => e.startsWith(`${s.k}:`) && e.includes("override"));
         const why =
           s.type === "TEXT"
@@ -1681,33 +1783,315 @@ function measure(spec: SpecNode, index: Map<string, SceneNode>, stats: Stats): {
       }
     }
     // Absolute layers: where they sit, not only their size (x, y in "figma" / "app").
-    if (n && "x" in n && typeof s.props.x === "number" && typeof s.props.y === "number") {
+    const absolute = typeof s.props.x === "number" && typeof s.props.y === "number";
+    if (n && "x" in n && absolute) {
       const [x, y] = [Math.round(n.x), Math.round(n.y)];
-      if (off(x, s.props.x) || off(y, s.props.y))
+      if (off(x, s.props.x as number) || off(y, s.props.y as number)) {
+        mine = true;
         found.push({
           k: s.k,
           figma: [x, y],
-          app: [s.props.x, s.props.y],
+          app: [s.props.x as number, s.props.y as number],
           why: "placed elsewhere",
           at: true,
-          size: Math.abs(x - s.props.x) + Math.abs(y - s.props.y),
+          size: Math.abs(x - (s.props.x as number)) + Math.abs(y - (s.props.y as number)),
         });
+      }
+    }
+    // In auto layout: where it sits in the nearest measured parent (rotated layers' boxes don't compare).
+    const here = s.measured?.x !== undefined && s.measured.y !== undefined && n && "absoluteTransform" in n && !s.props.rotation;
+    if (here && ref && !absolute && !disturbed && !mine && s.type !== "COMPONENT") {
+      const [ax, ay] = absOf(n!);
+      const figma: [number, number] = [Math.round(ax - ref.fig[0]), Math.round(ay - ref.fig[1])];
+      const app: [number, number] = [s.measured!.x! - ref.app[0], s.measured!.y! - ref.app[1]];
+      if (offBy(figma[0], app[0]) || offBy(figma[1], app[1])) {
+        mine = true;
+        found.push({ k: s.k, figma, app, inFlow: true, size: Math.abs(figma[0] - app[0]) + Math.abs(figma[1] - app[1]) });
+      }
+    }
+    const inner: Ref | null = here ? { fig: absOf(n!), app: [s.measured!.x!, s.measured!.y!] } : ref;
+    if (s.type !== "INSTANCE") {
+      // Once a child is off, the ones after it in this parent may only have been pushed.
+      let pushed = disturbed || mine;
+      for (const c of s.children ?? []) if (walk(c, inner, pushed)) pushed = true;
+    }
+    return mine;
+  };
+  walk(spec, null, false);
+  return { found, checked, skipped };
+}
+
+/** What CoDesignFlo reads back of a layer: label, severity rule; see checkProps. */
+const NUMERIC: Record<string, [label: string, tolerance: number, visible: number]> = {
+  paddingTop: ["padding top", 1, 4],
+  paddingRight: ["padding right", 1, 4],
+  paddingBottom: ["padding bottom", 1, 4],
+  paddingLeft: ["padding left", 1, 4],
+  itemSpacing: ["gap", 1, 4],
+  counterAxisSpacing: ["row gap", 1, 4],
+  cornerRadius: ["corner radius", 0.5, 4],
+  topLeftRadius: ["top-left radius", 0.5, 4],
+  topRightRadius: ["top-right radius", 0.5, 4],
+  bottomRightRadius: ["bottom-right radius", 0.5, 4],
+  bottomLeftRadius: ["bottom-left radius", 0.5, 4],
+  opacity: ["opacity", 0.02, 0.2],
+  strokeWeight: ["border width", 0.25, 1],
+  strokeTopWeight: ["top border width", 0.25, 1],
+  strokeRightWeight: ["right border width", 0.25, 1],
+  strokeBottomWeight: ["bottom border width", 0.25, 1],
+  strokeLeftWeight: ["left border width", 0.25, 1],
+  fontSize: ["font size", 0.25, 2],
+};
+const EXACT: Record<string, [label: string, severity: 1 | 2 | 3]> = {
+  layoutMode: ["layout", 3],
+  layoutWrap: ["wrap", 2],
+  primaryAxisAlignItems: ["alignment", 2],
+  counterAxisAlignItems: ["cross alignment", 2],
+  textCase: ["case", 2],
+  textDecoration: ["decoration", 2],
+  textAlignHorizontal: ["text alignment", 2],
+};
+const words = (v: unknown) => String(v).toLowerCase().replace(/_/g, " ");
+/** {value, unit} (line height, letter spacing) as people read it: "24px", "120%", "auto". */
+const measureText = (v: unknown) => {
+  const m = v as { value?: number; unit?: string } | null;
+  if (!m || typeof m !== "object") return String(v);
+  if (m.unit === "AUTO") return "auto";
+  return `${Math.round((m.value ?? 0) * 100) / 100}${m.unit === "PERCENT" ? "%" : "px"}`;
+};
+
+/**
+ * Live against the browser, property by property, after building and fitting: each layer's colours (as people
+ * see them), borders, radius, opacity, shadows, padding, gaps and alignment, and a text's characters, font,
+ * size, line height, spacing, case and decoration, read back from Figma against what the browser drew. Layers
+ * the designer kept as design, and the designer's own Library components, aren't checked.
+ */
+function checkProps(spec: SpecNode, index: Map<string, SceneNode>, stats: Stats): { found: PropDifference[]; check: PropCheck } {
+  const found: PropDifference[] = [];
+  let checked = 0;
+  let layers = 0;
+  const fontMissing = (family: string) => stats.errors.some((e) => e.startsWith("font missing") && e.includes(family));
+  const walk = (s0: SpecNode) => {
+    const node = index.get(s0.k);
+    const s = follow(s0, node);
+    if (!node || s.type === "COMPONENT_SET" || (node.type === "INSTANCE" && node.getSharedPluginData(NS, DS.lib))) {
+      if (s.type === "COMPONENT_SET") for (const c of s.children ?? []) walk(c);
+      return;
+    }
+    const pins = pinsOf(node);
+    if (!pins.includes("*")) {
+      const pinned = new Set(pins.flatMap(fieldsOf));
+      const n = node as unknown as Record<string, unknown>;
+      const add = (prop: string, figma: string, app: string, severity: 1 | 2 | 3, why?: string) =>
+        found.push({ k: s.k, prop, figma, app, severity, ...(why ? { why } : {}) });
+      const has = (prop: string) => prop in s.props && prop in n && !pinned.has(prop) && n[prop] !== figma.mixed && !s.bind?.[prop];
+      const mixedText = node.type === "TEXT" && !!s.runs?.length;
+      layers++;
+      for (const [prop, [label, tol, visible]] of Object.entries(NUMERIC)) {
+        if (!has(prop) || (mixedText && prop === "fontSize")) continue;
+        const [a, b] = [n[prop], s.props[prop]];
+        if (typeof a !== "number" || typeof b !== "number") continue;
+        checked++;
+        if (Math.abs(a - b) > tol) add(label, String(Math.round(a * 100) / 100), String(b), Math.abs(a - b) >= visible ? 2 : 1);
+      }
+      for (const [prop, [label, severity]] of Object.entries(EXACT)) {
+        if (!has(prop)) continue;
+        checked++;
+        if (n[prop] !== s.props[prop]) add(label, words(n[prop]), words(s.props[prop]), severity);
+      }
+      for (const prop of ["lineHeight", "letterSpacing"]) {
+        if (!has(prop) || mixedText) continue;
+        checked++;
+        const [a, b] = [n[prop] as { value?: number; unit: string }, s.props[prop] as { value?: number; unit: string }];
+        const off = a.unit !== b.unit || Math.abs((a.value ?? 0) - (b.value ?? 0)) > (prop === "lineHeight" ? 1 : 0.3);
+        if (off) add(prop === "lineHeight" ? "line height" : "letter spacing", measureText(a), measureText(b), 1);
+      }
+      for (const field of ["fills", "strokes"] as const) {
+        if (!has(field) || (mixedText && field === "fills")) continue;
+        const want = s.props[field] as string[];
+        const cur = (n[field] as readonly Paint[]).filter((p) => p.visible !== false);
+        checked++;
+        const label = field === "fills" ? (node.type === "TEXT" ? "text colour" : "colour") : "border colour";
+        const kind = (p: Paint | undefined) =>
+          !p ? "none" : p.type === "SOLID" ? "solid" : p.type.startsWith("GRADIENT") ? "gradient" : p.type.toLowerCase();
+        const wantKind = (w: string | undefined) =>
+          !w ? "none" : w.startsWith("gradient:") ? "gradient" : w.startsWith("image:") ? "image" : "solid";
+        if (cur.length !== want.length || want.some((w, i) => wantKind(w) !== kind(cur[i]))) {
+          add(label, cur.map(kind).join(" + ") || "none", want.map(wantKind).join(" + ") || "none", 3);
+          continue;
+        }
+        let worst = 0;
+        let pair: [string, string] = ["", ""];
+        want.forEach((w, i) => {
+          const p = cur[i]!;
+          const app = hexToRgba(w);
+          if (!app || p.type !== "SOLID") return;
+          const dE = deltaE({ ...p.color, a: p.opacity ?? 1 }, app);
+          if (dE > worst) {
+            worst = dE;
+            pair = [toHex(p.color, p.opacity ?? 1), w.toLowerCase()];
+          }
+        });
+        const sev = colourSeverity(worst);
+        if (sev) add(label, pair[0], pair[1], (field === "strokes" ? Math.max(1, sev - 1) : sev) as 1 | 2 | 3, `ΔE ${worst.toFixed(1)}`);
+      }
+      if (has("effects")) {
+        checked++;
+        const kinds = (e: readonly { type: string; visible?: boolean }[]) =>
+          e
+            .filter((x) => x.visible !== false)
+            .map((x) => words(x.type))
+            .join(" + ") || "none";
+        const [a, b] = [n.effects as readonly Effect[], s.props.effects as Effect[]];
+        if (kinds(a) !== kinds(b)) add("effects", kinds(a), kinds(b), 2);
+      }
+      if (node.type === "TEXT") {
+        const t = node as TextNode;
+        if (typeof s.props.characters === "string" && !pinned.has("characters")) {
+          checked++;
+          const norm = (x: string) => x.replace(/\s+/g, " ").trim();
+          if (norm(t.characters) !== norm(s.props.characters))
+            add("text", JSON.stringify(t.characters.slice(0, 40)), JSON.stringify(s.props.characters.slice(0, 40)), 3);
+        }
+        const want = s.props.fontName as FontName | undefined;
+        if (want && !mixedText && t.fontName !== figma.mixed && !pinned.has("fontName")) {
+          checked++;
+          const cur = t.fontName;
+          if (cur.family !== want.family)
+            add(
+              "font",
+              `${cur.family} ${cur.style}`,
+              `${want.family} ${want.style}`,
+              3,
+              fontMissing(want.family) ? "a font Figma doesn't have" : undefined,
+            );
+          else if (cur.style.replace(/\s+/g, "").toLowerCase() !== want.style.replace(/\s+/g, "").toLowerCase())
+            add("font style", cur.style, want.style, 2, fontMissing(want.family) ? "a style Figma doesn't have" : undefined);
+        }
+      }
     }
     if (s.type !== "INSTANCE") for (const c of s.children ?? []) walk(c);
   };
   walk(spec);
-  return { found, checked };
+  return { found, check: { checked, layers, differ: found.length } };
 }
 
 /** The innermost differing layers (fixing a child often fixes its parent). */
 const deepestOf = (found: Found[]) => found.filter((d) => !found.some((o) => o !== d && o.k.startsWith(`${d.k}/`)));
 
-/** What's left to report: the innermost differences, misplaced layers first, largest first. */
+/**
+ * What's left to report: the innermost differences, misplaced layers first, largest first. The same layer
+ * differing the same way in several places (a card's title wrapping in every card) is one cause: reported once,
+ * with how many more are like it.
+ */
 function differences(found: Found[]): Difference[] {
-  return deepestOf(found)
+  const groups = new Map<string, Found[]>();
+  for (const d of deepestOf(found)) {
+    const name = d.k.split("/").pop()!.replace(/#\d+$/, "");
+    const sign = (x: number) => Math.sign(Math.round(x));
+    const how = d.at || d.inFlow ? "place" : `${sign(d.figma[0] - d.app[0])}${sign(d.figma[1] - d.app[1])}`;
+    const key = `${name}|${how}|${d.why ?? ""}`;
+    groups.set(key, [...(groups.get(key) ?? []), d]);
+  }
+  return [...groups.values()]
+    .map((g) => {
+      const worst = g.reduce((a, b) => (b.size > a.size ? b : a));
+      return { ...worst, ...(g.length > 1 ? { alike: g.length - 1 } : {}) };
+    })
     .sort((a, b) => Number(!!b.at) - Number(!!a.at) || b.size - a.size)
     .slice(0, 5)
     .map(({ size: _, ...d }) => d);
+}
+
+/** Equal columns in a row: two or more children within 2 px of the same width. */
+const equalColumns = (widths: number[]) => (widths.length >= 2 && Math.max(...widths) - Math.min(...widths) <= 2 ? widths.length : 0);
+
+/** The look of a designer's frame as a whole (placed components are counted once, not inside). */
+function nodeSignals(root: SceneNode): StyleSignals {
+  const s = noSignals();
+  const walk = (n: SceneNode) => {
+    if (!n.visible) return;
+    const fills =
+      "fills" in n && n.fills !== figma.mixed ? (n.fills as readonly Paint[]).filter((f) => f.visible !== false).map((f) => f.type) : [];
+    const effects =
+      "effects" in n
+        ? n.effects
+            .filter((e) => e.visible)
+            .map((e) => ({
+              type: e.type,
+              radius: "radius" in e ? e.radius : 0,
+              spread: "spread" in e ? (e.spread ?? 0) : 0,
+              offset: "offset" in e ? e.offset : undefined,
+            }))
+        : [];
+    const r = n as Partial<RectangleCornerMixin & CornerMixin>;
+    const radius =
+      typeof r.cornerRadius === "number"
+        ? r.cornerRadius
+        : Math.max(r.topLeftRadius ?? 0, r.topRightRadius ?? 0, r.bottomLeftRadius ?? 0, r.bottomRightRadius ?? 0);
+    const f = "layoutMode" in n && n.layoutMode !== "NONE" ? (n as FrameNode) : null;
+    const spacing = f
+      ? [
+          ...(f.primaryAxisAlignItems === "SPACE_BETWEEN" ? [] : [f.itemSpacing]),
+          f.paddingTop,
+          f.paddingRight,
+          f.paddingBottom,
+          f.paddingLeft,
+        ]
+      : [];
+    const kids = "children" in n ? (n.children as readonly SceneNode[]).filter((c) => c.visible) : [];
+    const columns =
+      f?.layoutMode === "GRID"
+        ? ((f as unknown as { gridColumnCount?: number }).gridColumnCount ?? 0)
+        : f?.layoutMode === "HORIZONTAL"
+          ? equalColumns(kids.map((c) => c.width))
+          : 0;
+    countLook(s, { fills, effects, radius, spacing, columns });
+    if (n.type !== "INSTANCE") for (const c of kids) walk(c);
+  };
+  walk(root);
+  return s;
+}
+
+/** The look of the app's page as compiled, counted as nodeSignals counts a frame. */
+function specSignals(root: SpecNode): StyleSignals {
+  const s = noSignals();
+  const walk = (n: SpecNode) => {
+    const p = n.props;
+    const num = (k: string) => (typeof p[k] === "number" ? (p[k] as number) : 0);
+    const fills = Array.isArray(p.fills) ? (p.fills as string[]) : [];
+    const effects = Array.isArray(p.effects)
+      ? (p.effects as { type: string; radius?: number; spread?: number; offset?: { x: number; y: number } }[])
+      : [];
+    const radius = Math.max(
+      num("cornerRadius"),
+      num("topLeftRadius"),
+      num("topRightRadius"),
+      num("bottomLeftRadius"),
+      num("bottomRightRadius"),
+    );
+    const auto = p.layoutMode && p.layoutMode !== "NONE";
+    const spacing = auto
+      ? [
+          ...(p.primaryAxisAlignItems === "SPACE_BETWEEN" ? [] : [num("itemSpacing")]),
+          num("paddingTop"),
+          num("paddingRight"),
+          num("paddingBottom"),
+          num("paddingLeft"),
+        ]
+      : [];
+    const kids = n.type === "INSTANCE" ? [] : (n.children ?? []);
+    const columns =
+      p.layoutMode === "GRID"
+        ? num("gridColumnCount")
+        : p.layoutMode === "HORIZONTAL"
+          ? equalColumns(kids.flatMap((c) => (c.measured ? [c.measured.w] : [])))
+          : 0;
+    countLook(s, { fills, effects, radius, spacing, columns });
+    for (const c of kids) walk(c);
+  };
+  walk(root);
+  return s;
 }
 
 const ROUNDS = 3;
@@ -1733,6 +2117,8 @@ async function fitToApp(spec: SpecNode, index: Map<string, SceneNode>, stats: St
   for (let round = 0; round < ROUNDS && m.found.length; round++) {
     let changed = 0;
     for (const d of deepestOf(m.found)) {
+      // Places in auto layout follow from sizes and the layout: reported, not moved.
+      if (d.inFlow) continue;
       const n = index.get(d.k);
       const s = specs.get(d.k);
       const pins = n ? pinsOf(n) : [];
@@ -1756,9 +2142,12 @@ async function fitToApp(spec: SpecNode, index: Map<string, SceneNode>, stats: St
     const n = index.get(k);
     if (n && n.getSharedPluginData(NS, "fitted") !== "1") n.setSharedPluginData(NS, "fitted", "1");
   }
-  stats.score = { before, after: pct(m), checked: m.checked };
+  stats.score = { before, after: pct(m), checked: m.checked, ...(m.skipped ? { skipped: m.skipped } : {}) };
   if (fitted.size) stats.fitted = [...fitted];
   stats.differs = differences(m.found);
+  const props = checkProps(spec, index, stats);
+  stats.propCheck = props.check;
+  if (props.found.length) stats.props = worstFirst(props.found);
 }
 
 /** Fits one layer to the app: its place, or its size on the axes that are off (text: width, then lines). */
@@ -1988,6 +2377,7 @@ export async function reconcileScreen(p0: {
   const tried = design ? await designCopy(design, p.spec, screens) : null;
   const follows = !!tried && tried.match >= FOLLOWS;
   if (tried) stats.designMatch = { now: Math.round(100 * tried.match), ...(anchor?.match !== undefined ? { was: anchor.match } : {}) };
+  if (design) stats.signals = { design: nodeSignals(design.node), app: specSignals(p.spec) };
   if (follows && (newDesign || !onDesign)) {
     // The app follows the design: Live is the design with the code's changes on top (drawn as the designer did).
     const copy = tried!.copy;
@@ -2058,12 +2448,28 @@ export async function reconcileScreen(p0: {
   return { id: root.id, stats };
 }
 
-/** PNG (base64) of a node, by id or by sync key (originals only). */
-export async function exportNode(p: { k?: string; id?: string }) {
+/**
+ * PNG (base64) of a node, by id or by sync key (originals only). With `width`: a copy resized to that width, its
+ * height following its content (as the browser's page does at that width), exported and removed — Live as Figma
+ * reflows it, to check that fill, hug and wrap resize like the app.
+ */
+export async function exportNode(p: { k?: string; id?: string; width?: number }) {
   await figma.loadAllPagesAsync();
   const n = (p.id ? await figma.getNodeByIdAsync(p.id) : figma.root.findOne((x) => keyOf(x) === p.k && isOriginal(x))) as SceneNode | null;
   if (!n) throw new Error(`no node ${p.id ?? p.k}`);
-  return figma.base64Encode(await n.exportAsync({ format: "PNG", constraint: { type: "SCALE", value: 1 }, useAbsoluteBounds: true }));
+  const png = (x: SceneNode) => x.exportAsync({ format: "PNG", constraint: { type: "SCALE", value: 1 }, useAbsoluteBounds: true });
+  if (!p.width || !("clone" in n)) return figma.base64Encode(await png(n));
+  const copy = n.clone() as FrameNode;
+  try {
+    copy.x = n.x;
+    copy.y = n.y + n.height + 10_000; // out of sight while it's there
+    copy.resize(Math.max(1, p.width), copy.height);
+    if (copy.layoutMode === "VERTICAL") copy.primaryAxisSizingMode = "AUTO";
+    else if (copy.layoutMode === "HORIZONTAL") copy.counterAxisSizingMode = "AUTO";
+    return figma.base64Encode(await png(copy));
+  } finally {
+    copy.remove();
+  }
 }
 
 /** Map key → node id for every original keyed node in the section (to prove ids are stable across runs). */

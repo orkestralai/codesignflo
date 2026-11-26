@@ -4,8 +4,12 @@ import type { IRNode, Sizing, Tokened } from "@codesignflo/core";
 
 export function extractInPage(): IRNode {
   // data-cdl(-container) is the attribute's name before the rename to CoDesignFlo; both are read.
-  const container = (document.querySelector("[data-cdf-container], [data-cdl-container]") ??
+  let container = (document.querySelector("[data-cdf-container], [data-cdl-container]") ??
     document.querySelector("#storybook-root")) as HTMLElement;
+  // Wrappers inside wrappers (a story's decorator inside its component's): the innermost one holds the story
+  // (the inner wrapper was read as the component's root, an unnamed div).
+  while (container.firstElementChild?.matches("[data-cdf-container], [data-cdl-container]"))
+    container = container.firstElementChild as HTMLElement;
   const root = container.firstElementChild as HTMLElement;
   if (!root) throw new Error("story rendered nothing");
 
@@ -291,18 +295,35 @@ export function extractInPage(): IRNode {
   };
 
   /** The picture as shown (object-fit cover/contain/fill applied) as PNG at 2×; nothing if unreadable. */
-  const rasterize = (img: HTMLImageElement, cs: CSSStyleDeclaration): { image?: { png: string } } => {
-    const r = img.getBoundingClientRect();
-    if (!img.complete || !img.naturalWidth || r.width < 1 || r.height < 1) return {};
+  /** Pictures the CLI fetched for the page (another site's, which the page can't read), by address. */
+  const fetched = (window as unknown as { __cdfPictures?: Record<string, HTMLImageElement> }).__cdfPictures ?? {};
+  const absolute = (u: string) => {
+    try {
+      return new URL(u, location.href).href;
+    } catch {
+      return u;
+    }
+  };
+  const rasterize = (el: HTMLImageElement | HTMLVideoElement, cs: CSSStyleDeclaration): { image?: { png: string } } => {
+    const r = el.getBoundingClientRect();
+    // A video: the frame it shows, else its poster (a video defaults to object-fit: contain, as the browser draws it).
+    const video = el instanceof HTMLVideoElement ? el : null;
+    const poster = video?.poster ? fetched[absolute(video.poster)] : undefined;
+    const img: HTMLImageElement | HTMLVideoElement | undefined = video
+      ? video.readyState >= 2 && video.videoWidth
+        ? video
+        : poster
+      : (fetched[absolute((el as HTMLImageElement).currentSrc)] ?? (el as HTMLImageElement));
+    const iw = img instanceof HTMLVideoElement ? img.videoWidth : (img?.naturalWidth ?? 0);
+    const ih = img instanceof HTMLVideoElement ? img.videoHeight : (img?.naturalHeight ?? 0);
+    if (!img || (img instanceof HTMLImageElement && !img.complete) || !iw || r.width < 1 || r.height < 1) return {};
     try {
       const scale = 2;
       const c = document.createElement("canvas");
       c.width = Math.round(r.width * scale);
       c.height = Math.round(r.height * scale);
       const ctx = c.getContext("2d")!;
-      const iw = img.naturalWidth;
-      const ih = img.naturalHeight;
-      const fit = cs.objectFit;
+      const fit = video && img === poster ? "contain" : cs.objectFit;
       let dw = c.width;
       let dh = c.height;
       if (fit === "cover" || fit === "contain") {
@@ -314,6 +335,187 @@ export function extractInPage(): IRNode {
       return { image: { png: c.toDataURL("image/png").split(",")[1]! } };
     } catch {
       return {}; // cross-origin picture: keep the placeholder
+    }
+  };
+  /** A CSS list split at its top-level commas (not those inside rgba(…) or a gradient). */
+  const splitTop = (v: string): string[] => {
+    const out: string[] = [];
+    let depth = 0;
+    let cur = "";
+    for (const ch of v) {
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      if (ch === "," && depth === 0) {
+        out.push(cur.trim());
+        cur = "";
+      } else cur += ch;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    return out;
+  };
+  /** A gradient's colour stops, positions 0–1 along a line `length` px long (unset ones spread evenly). */
+  const stopsOf = (parts: string[], length: number): [number, string][] => {
+    const stops = parts.flatMap((p) => {
+      const c = /(rgba?\([^)]*\)|#[0-9a-f]{3,8}\b|transparent)/i.exec(p)?.[0];
+      if (!c) return [];
+      const rest = p.replace(c, "");
+      const pct = /(-?[\d.]+)%/.exec(rest);
+      const pxv = /(-?[\d.]+)px/.exec(rest);
+      return [
+        [
+          pct ? parseFloat(pct[1]!) / 100 : pxv ? parseFloat(pxv[1]!) / Math.max(1, length) : Number.NaN,
+          c === "transparent" ? "rgba(0,0,0,0)" : c,
+        ] as [number, string],
+      ];
+    });
+    if (!stops.length) return [];
+    if (Number.isNaN(stops[0]![0])) stops[0]![0] = 0;
+    if (Number.isNaN(stops[stops.length - 1]![0])) stops[stops.length - 1]![0] = 1;
+    for (let i = 1; i < stops.length - 1; i++)
+      if (Number.isNaN(stops[i]![0])) {
+        let j = i;
+        while (Number.isNaN(stops[j]![0])) j++;
+        stops[i]![0] = stops[i - 1]![0] + (stops[j]![0] - stops[i - 1]![0]) / (j - i + 1);
+      }
+    // Positions only go forward (CSS clamps a stop before the previous one to it).
+    for (let i = 1; i < stops.length; i++) stops[i]![0] = Math.max(stops[i]![0], stops[i - 1]![0]);
+    return stops.map(([pos, c]) => [Math.min(1, Math.max(0, pos)), c]);
+  };
+  /** One gradient layer drawn into the box x, y, w, h; false when it isn't one this can draw. */
+  const drawGradient = (ctx: CanvasRenderingContext2D, layer: string, x: number, y: number, w: number, h: number): boolean => {
+    const m = /^(?:repeating-)?(linear|radial|conic)-gradient\(([\s\S]*)\)$/.exec(layer.trim());
+    if (!m) return false;
+    const parts = splitTop(m[2]!);
+    const isColour = (p: string) => /^(rgba?\(|#|transparent)/i.test(p);
+    const head = parts[0] && !isColour(parts[0]) ? parts.shift()! : "";
+    const at = /at\s+(-?[\d.]+)(%|px)\s+(-?[\d.]+)(%|px)/.exec(head);
+    const cx = x + (at ? (at[2] === "%" ? (parseFloat(at[1]!) / 100) * w : parseFloat(at[1]!)) : w / 2);
+    const cy = y + (at ? (at[4] === "%" ? (parseFloat(at[3]!) / 100) * h : parseFloat(at[3]!)) : h / 2);
+    let g: CanvasGradient;
+    ctx.save();
+    if (m[1] === "linear") {
+      const dirs: Record<string, number> = { top: 0, right: 90, bottom: 180, left: 270 };
+      let angle = 180;
+      if (/(deg|turn|rad)$/.test(head)) {
+        const v = parseFloat(head);
+        angle = head.endsWith("turn") ? v * 360 : head.endsWith("rad") ? (v * 180) / Math.PI : v;
+      } else if (head.startsWith("to ")) {
+        const words = head.slice(3).split(/\s+/);
+        // A corner: towards it, as CSS points the line at the corner of this box.
+        if (words.length === 2) {
+          const sx = words.includes("right") ? 1 : -1;
+          const sy = words.includes("bottom") ? 1 : -1;
+          angle = (Math.atan2(sx * h, -sy * w) * 180) / Math.PI;
+        } else angle = dirs[words[0]!] ?? 180;
+      }
+      const a = (angle * Math.PI) / 180;
+      const dx = Math.sin(a);
+      const dy = -Math.cos(a);
+      const len = Math.abs(w * dx) + Math.abs(h * dy);
+      g = ctx.createLinearGradient(
+        x + w / 2 - (dx * len) / 2,
+        y + h / 2 - (dy * len) / 2,
+        x + w / 2 + (dx * len) / 2,
+        y + h / 2 + (dy * len) / 2,
+      );
+      for (const [pos, c] of stopsOf(parts, len)) g.addColorStop(pos, c);
+    } else if (m[1] === "radial") {
+      // Farthest corner (CSS's default size): a circle reaches it; an ellipse keeps the box's proportions.
+      const rx = Math.max(cx - x, x + w - cx);
+      const ry = Math.max(cy - y, y + h - cy);
+      const circle = /\bcircle\b/.test(head);
+      const r = circle ? Math.hypot(rx, ry) : rx * Math.SQRT2;
+      ctx.translate(cx, cy);
+      if (!circle && rx > 0) ctx.scale(1, ry / rx);
+      g = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(1, r));
+      for (const [pos, c] of stopsOf(parts, r)) g.addColorStop(pos, c);
+      ctx.fillStyle = g;
+      // The box, in the scaled space.
+      ctx.fillRect(x - cx, (y - cy) * (circle || rx <= 0 ? 1 : rx / ry), w, h * (circle || rx <= 0 ? 1 : rx / ry));
+      ctx.restore();
+      return true;
+    } else {
+      const from = /from\s+(-?[\d.]+)deg/.exec(head);
+      g = ctx.createConicGradient(((from ? parseFloat(from[1]!) : 0) - 90) * (Math.PI / 180), cx, cy);
+      for (const [pos, c] of stopsOf(parts, 1)) g.addColorStop(pos, c);
+    }
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+    return true;
+  };
+  /**
+   * The element's background layers (pictures, gradients) as the browser draws them, bottom layer first, at its
+   * size × 2: background-size (cover, contain, lengths, percentages), position and repeat applied in its padding
+   * box, as CSS places them. Undefined when nothing could be drawn (a picture not loaded, or another site's the
+   * CLI couldn't fetch).
+   */
+  const paintBackground = (cs: CSSStyleDeclaration, bw: number, bh: number): string | undefined => {
+    const layers = splitTop(cs.backgroundImage);
+    if (!layers.length || bw < 1 || bh < 1) return undefined;
+    const sizes = splitTop(cs.backgroundSize);
+    const xs = splitTop(cs.backgroundPositionX);
+    const ys = splitTop(cs.backgroundPositionY);
+    const repeats = splitTop(cs.backgroundRepeat);
+    const scale = 2;
+    const c = document.createElement("canvas");
+    c.width = Math.round(bw * scale);
+    c.height = Math.round(bh * scale);
+    const ctx = c.getContext("2d")!;
+    ctx.scale(scale, scale);
+    // The padding box: where backgrounds are placed (background-origin), drawn under the border too.
+    const ox = px(cs.borderLeftWidth);
+    const oy = px(cs.borderTopWidth);
+    const W = bw - ox - px(cs.borderRightWidth);
+    const H = bh - oy - px(cs.borderBottomWidth);
+    let drawn = 0;
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const layer = layers[i]!;
+      const url = /^url\(["']?([^"')]+)["']?\)$/.exec(layer);
+      const img = url ? fetched[absolute(url[1]!)] : undefined;
+      if (url && !img?.naturalWidth) continue;
+      if (!url && !/gradient\(/.test(layer)) continue;
+      // A gradient has no size of its own: the box's, unless background-size says otherwise.
+      const iw = img ? img.naturalWidth : W;
+      const ih = img ? img.naturalHeight : H;
+      const size = (sizes[i % sizes.length] ?? "auto").split(/\s+/);
+      let dw = iw;
+      let dh = ih;
+      if (!img && (size[0] === "cover" || size[0] === "contain")) {
+        dw = W;
+        dh = H;
+      } else if (size[0] === "cover" || size[0] === "contain") {
+        const k = (size[0] === "cover" ? Math.max : Math.min)(W / iw, H / ih);
+        dw = iw * k;
+        dh = ih * k;
+      } else {
+        const len = (v: string | undefined, of: number) =>
+          !v || v === "auto" ? undefined : v.endsWith("%") ? (parseFloat(v) / 100) * of : px(v);
+        const sw = len(size[0], W);
+        const sh = len(size[1], H);
+        dw = sw ?? (sh !== undefined ? (sh * iw) / ih : iw);
+        dh = sh ?? (sw !== undefined ? (sw * ih) / iw : ih);
+      }
+      const pos = (v: string | undefined, room: number) => (!v ? 0 : v.endsWith("%") ? (parseFloat(v) / 100) * room : px(v));
+      const x0 = ox + pos(xs[i % xs.length], W - dw);
+      const y0 = oy + pos(ys[i % ys.length], H - dh);
+      const rep = repeats[i % repeats.length] ?? "repeat";
+      const rx = rep === "repeat" || rep === "repeat-x" || rep.startsWith("repeat ") || rep === "space" || rep === "round";
+      const ry = rep === "repeat" || rep === "repeat-y" || rep.endsWith(" repeat") || rep === "space" || rep === "round";
+      if (dw < 0.5 || dh < 0.5) continue;
+      const startX = rx ? x0 - Math.ceil(x0 / dw) * dw : x0;
+      const startY = ry ? y0 - Math.ceil(y0 / dh) * dh : y0;
+      for (let y = startY; y < bh && (ry || y === startY); y += dh)
+        for (let x = startX; x < bw && (rx || x === startX); x += dw)
+          if (img) ctx.drawImage(img, x, y, dw, dh);
+          else if (!drawGradient(ctx, layer, x, y, dw, dh)) break;
+      drawn++;
+    }
+    if (!drawn) return undefined;
+    try {
+      return c.toDataURL("image/png").split(",")[1];
+    } catch {
+      return undefined; // a picture that tainted the canvas after all
     }
   };
   /** Height of one rendered line of the element's own text (its line box with line-height: normal). */
@@ -354,7 +556,31 @@ export function extractInPage(): IRNode {
       ...(align ? { align } : {}),
       ...(textCase ? { case: textCase } : {}),
       ...(cs.fontStyle === "italic" || cs.fontStyle.startsWith("oblique") ? { italic: true as const } : {}),
+      ...decorationOf(el),
+      ...(linkOf(el) ? { link: linkOf(el) } : {}),
     };
+  };
+  /**
+   * Where an element's text links to: the <a href> it's in, when the href is absolute (http/https, mailto:, tel:).
+   * A relative one ("/pricing", "#faq") points into the app as Storybook serves it, which Figma can't open.
+   */
+  const linkOf = (el: Element): string | undefined => {
+    const href = el.closest("a[href]")?.getAttribute("href")?.trim() ?? "";
+    return /^(https?:\/\/|mailto:|tel:)/i.test(href) ? href : undefined;
+  };
+  /**
+   * Underlined or struck through: a decoration is drawn across inline children too (a <span> inside an underlined
+   * link has none of its own), so the inline elements around the text count as well.
+   */
+  const decorationOf = (el: Element): { decoration?: "UNDERLINE" | "STRIKETHROUGH" } => {
+    for (let e: Element | null = el; e; e = e.parentElement) {
+      const k = getComputedStyle(e);
+      if (k.textDecorationLine.includes("line-through")) return { decoration: "STRIKETHROUGH" };
+      if (k.textDecorationLine.includes("underline")) return { decoration: "UNDERLINE" };
+      // Past the first ancestor that isn't inline, the decoration would be its own layer's.
+      if (e !== el && k.display !== "inline") break;
+    }
+    return {};
   };
   /**
    * The font the text asks for: the first named family, past CSS's generic names ("ui-monospace, SFMono-Regular,
@@ -362,9 +588,45 @@ export function extractInPage(): IRNode {
    */
   const GENERIC =
     /^(ui-monospace|ui-sans-serif|ui-serif|ui-rounded|system-ui|-apple-system|BlinkMacSystemFont|monospace|sans-serif|serif|cursive|fantasy|math|emoji)$/i;
+  /**
+   * Whether the browser could draw this family: a web font (@font-face) with a face that loaded, or a font installed
+   * on this machine (it measures differently from the generic fonts). "Inter, Helvetica" without Inter loaded is
+   * drawn in Helvetica, and Live should say Helvetica too.
+   */
+  const faces = new Map<string, boolean>();
+  for (const f of Array.from(document.fonts ?? [])) {
+    const fam = f.family.replace(/["']/g, "").trim().toLowerCase();
+    faces.set(fam, (faces.get(fam) ?? false) || f.status === "loaded");
+  }
+  const available = new Map<string, boolean>();
+  const drawable = (family: string): boolean => {
+    const key = family.toLowerCase();
+    if (faces.has(key)) return faces.get(key)!;
+    if (!available.has(key)) {
+      const ctx = document.createElement("canvas").getContext("2d")!;
+      const sample = "mmmmmmmmmmlliWW@#0";
+      const width = (font: string) => {
+        ctx.font = font;
+        return ctx.measureText(sample).width;
+      };
+      available.set(
+        key,
+        ["monospace", "serif", "sans-serif"].some((g) => width(`72px "${family}", ${g}`) !== width(`72px ${g}`)),
+      );
+    }
+    return available.get(key)!;
+  };
   const familyOf = (ecs: CSSStyleDeclaration) => {
     const names = ecs.fontFamily.split(",").map((f) => f.replace(/["']/g, "").trim());
-    return names.find((f) => f && !GENERIC.test(f)) ?? (/mono/i.test(names[0] ?? "") ? "SF Mono" : names[0]!);
+    const asked = names.find((f) => f && !GENERIC.test(f)) ?? (/mono/i.test(names[0] ?? "") ? "SF Mono" : names[0]!);
+    // The first the browser could draw. A generic name always can, so when one comes first (ui-monospace is SF
+    // Mono, system-ui the system's font), the first named family stands for it, as before; when none could be
+    // drawn, the first asked for (Figma may have it even if this browser hasn't).
+    for (const f of names) {
+      if (!f || GENERIC.test(f)) return asked;
+      if (drawable(f)) return f;
+    }
+    return asked;
   };
   /**
    * A paragraph whose words flow across inline parts (a bold email, a link, a line break) as one text with
@@ -431,6 +693,8 @@ export function extractInPage(): IRNode {
         fontSize: px(k.fontSize),
         color: hex(k.color) ?? "#000000",
         underline: k.textDecorationLine.includes("underline"),
+        strikethrough: k.textDecorationLine.includes("line-through"),
+        link: linkOf(o) ?? "",
       };
     };
     const base = look(el);
@@ -560,45 +824,112 @@ export function extractInPage(): IRNode {
     // Below the first line: starting under the first item (items of a line differ in height, not in line).
     return boxes.some((b) => b.top >= boxes[0]!.bottom - 0.5);
   };
-  /** A ::before / ::after drawn as a box (absolutely placed, with a background or border), else nothing. */
+  /**
+   * The text a ::before / ::after shows: its quoted strings and attr(…) values ("*" after a required label, "/"
+   * between breadcrumbs, "“" before a quote). Icon-font glyphs (private-use characters) are left out: without the
+   * icon font Figma draws them as boxes.
+   */
+  const pseudoText = (el: HTMLElement, p: CSSStyleDeclaration): string => {
+    if (!p.content || p.content === "none" || p.content === "normal") return "";
+    let out = "";
+    for (const m of p.content.matchAll(/"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|attr\(([\w-]+)\)/g))
+      out += m[3] ? (el.getAttribute(m[3]) ?? "") : (m[1] ?? m[2] ?? "").replace(/\\(.)/g, "$1");
+    return out.replace(/[\uE000-\uF8FF]/g, "");
+  };
+  const pseudoShown = (p: CSSStyleDeclaration) =>
+    p.content !== "none" && p.content !== "normal" && p.display !== "none" && p.visibility !== "hidden" && parseFloat(p.opacity) !== 0;
+  /** Text a ::before / ::after adds inline to its element's own text (drawn as part of it), else "". */
+  const inlinePseudo = (el: HTMLElement, which: "::before" | "::after"): string => {
+    const p = getComputedStyle(el, which);
+    if (!pseudoShown(p) || !p.display.startsWith("inline") || p.position === "absolute" || p.position === "fixed") return "";
+    if (hex(p.backgroundColor) || (p.borderTopStyle !== "none" && px(p.borderTopWidth) > 0)) return "";
+    return pseudoText(el, p);
+  };
+  /** How wide a pseudo-element's text is drawn (it has no box of its own to measure). */
+  const measure = (p: CSSStyleDeclaration, text: string): number => {
+    const ctx = document.createElement("canvas").getContext("2d")!;
+    ctx.font = p.font || `${p.fontWeight} ${p.fontSize} ${p.fontFamily}`;
+    return ctx.measureText(text).width + px(p.letterSpacing) * text.length;
+  };
+  /**
+   * A ::before / ::after as a layer: a box (an active tab's underline, a dot, a divider, a badge), its text if it
+   * has any, placed where it's drawn (absolutely, its translate included), else first or last in the flow. (In an
+   * element that is only text, inline pseudo text is part of that text instead: see inlinePseudo.)
+   */
   const pseudoBox = (el: HTMLElement, ecs: CSSStyleDeclaration, which: "::before" | "::after"): IRNode | null => {
     const p = getComputedStyle(el, which);
-    if (p.content === "none" || p.content === "normal" || p.display === "none") return null;
-    if (p.content.replace(/["']/g, "").trim()) return null;
-    if (p.position !== "absolute" || p.visibility === "hidden" || parseFloat(p.opacity) === 0) return null;
+    if (!pseudoShown(p)) return null;
     const m = /^matrix\(([^)]+)\)/.exec(p.transform);
+    let shift = [0, 0];
     if (m) {
-      const [a, b, c, d] = m[1]!.split(",").map(Number);
+      const [a, b, c, d, e, f] = m[1]!.split(",").map(Number);
       if (Math.hypot(a!, b!) < 0.01 || Math.hypot(c!, d!) < 0.01) return null;
+      shift = [e ?? 0, f ?? 0];
     }
-    const w = px(p.width);
-    const h = px(p.height);
+    const absolute = p.position === "absolute" || p.position === "fixed";
+    const text = pseudoText(el, p);
     const fill = hex(p.backgroundColor);
     const bw = p.borderTopStyle === "none" ? 0 : px(p.borderTopWidth);
-    if (w <= 0 || h <= 0 || (!fill && !bw)) return null;
+    const boxed = !!fill || bw > 0 || cornersOf(p, 1, 1).radius !== undefined;
+    if (!text && !boxed) return null;
+    const lineH = p.lineHeight === "normal" ? px(p.fontSize) * 1.2 : px(p.lineHeight);
+    const pad = [px(p.paddingTop), px(p.paddingRight), px(p.paddingBottom), px(p.paddingLeft)];
+    const tw = text ? measure(p, text) : 0;
+    const w = px(p.width) || tw + pad[1]! + pad[3]! + 2 * bw;
+    const h = px(p.height) || (text ? lineH : 0) + pad[0]! + pad[2]! + 2 * bw;
+    if (w <= 0 || h <= 0) return null;
     // Offsets are from the padding box; Figma places from the frame's outer edge (its border included).
     const r = before.get(el) ?? el.getBoundingClientRect();
     const inner = {
       w: r.width - px(ecs.borderLeftWidth) - px(ecs.borderRightWidth),
       h: r.height - px(ecs.borderTopWidth) - px(ecs.borderBottomWidth),
     };
-    const x = px(ecs.borderLeftWidth) + (p.left !== "auto" ? px(p.left) : inner.w - px(p.right) - w);
-    const y = px(ecs.borderTopWidth) + (p.top !== "auto" ? px(p.top) : inner.h - px(p.bottom) - h);
-    const radius = px(p.borderTopLeftRadius);
+    const row = ecs.display.includes("flex") && !ecs.flexDirection.startsWith("column");
+    const x = absolute
+      ? px(ecs.borderLeftWidth) + (p.left !== "auto" ? px(p.left) : inner.w - px(p.right) - w) + shift[0]!
+      : which === "::before" || !row
+        ? px(ecs.borderLeftWidth) + px(ecs.paddingLeft)
+        : r.width - px(ecs.borderRightWidth) - px(ecs.paddingRight) - w;
+    const y = absolute
+      ? px(ecs.borderTopWidth) + (p.top !== "auto" ? px(p.top) : inner.h - px(p.bottom) - h) + shift[1]!
+      : which === "::before" || row
+        ? px(ecs.borderTopWidth) + px(ecs.paddingTop)
+        : r.height - px(ecs.borderBottomWidth) - px(ecs.paddingBottom) - h;
+    const name = which === "::before" ? "before" : "after";
+    const at = { x: round(r.left - rootBox.left + x), y: round(r.top - rootBox.top + y) };
+    const label: IRNode | null = text
+      ? {
+          name: `${name} text`,
+          type: "TEXT",
+          width: round(tw),
+          height: round(lineH),
+          sizing: { w: "hug", h: "hug" },
+          text: textOf(el, p, text),
+          at: { x: round(at.x + bw + pad[3]!), y: round(at.y + bw + pad[0]!) },
+        }
+      : null;
+    if (label && !boxed) return { ...label, name, ...(absolute ? { absolute: { x: round(x), y: round(y) } } : {}), at };
     const zero = tok(0);
     return {
-      name: which === "::before" ? "before" : "after",
+      name,
       type: "FRAME",
       width: round(w),
       height: round(h),
       sizing: { w: "fixed", h: "fixed" },
       // Every frame has a layout (the compiler sets Figma's from it; without one it crashed).
-      layout: { direction: "VERTICAL", gap: zero, padding: [zero, zero, zero, zero], align: "MIN", justify: "MIN" },
-      absolute: { x: round(x), y: round(y) },
+      layout: {
+        direction: "VERTICAL",
+        gap: zero,
+        padding: pad.map((v) => tok(v)) as [Tokened<number>, Tokened<number>, Tokened<number>, Tokened<number>],
+        align: p.textAlign === "center" ? "CENTER" : "MIN",
+        justify: "CENTER",
+      },
+      ...(absolute ? { absolute: { x: round(x), y: round(y) } } : {}),
       ...(fill ? { fill: tok(fill, tokenIn(p.getPropertyValue("background-color"))) } : {}),
       ...(bw ? { stroke: { color: tok(hex(p.borderTopColor) ?? "#00000000"), width: bw } } : {}),
-      ...(radius ? { radius: tok(radius) } : {}),
-      at: { x: round(r.left - rootBox.left + x), y: round(r.top - rootBox.top + y) },
+      ...cornersOf(p, w, h),
+      ...(label ? { children: [label] } : {}),
+      at,
     };
   };
   /**
@@ -756,6 +1087,168 @@ export function extractInPage(): IRNode {
     }
     return true;
   };
+  /**
+   * The radius of each corner (top-left, top-right, bottom-right, bottom-left) at this size, a percentage of the
+   * box included (a 50% avatar): one value when they're the same, else each corner (tabs, sheets, joined buttons).
+   */
+  const cornersOf = (c: CSSStyleDeclaration, w: number, h: number, token?: string): Pick<IRNode, "radius" | "radii"> => {
+    const at = (v: string) => Math.min(9999, round(v.trim().endsWith("%") ? (parseFloat(v) / 100) * Math.min(w, h) : px(v)));
+    const r = [c.borderTopLeftRadius, c.borderTopRightRadius, c.borderBottomRightRadius, c.borderBottomLeftRadius].map((v) =>
+      at(v.split(" ")[0] ?? v),
+    ) as [number, number, number, number];
+    if (r.every((x) => x === r[0])) return r[0] > 0 ? { radius: tok(r[0], token) } : {};
+    return { radius: tok(r[0]), radii: r };
+  };
+  /** What any element draws over its own content (frames, pictures, SVGs and texts): opacity, filters, blending. */
+  const overlayOf = (c: CSSStyleDeclaration): Pick<IRNode, "opacity" | "filter" | "backdrop" | "blend"> => {
+    const opacity = parseFloat(c.opacity);
+    const backdrop = c.backdropFilter || (c as unknown as Record<string, string>).webkitBackdropFilter || "";
+    return {
+      ...(opacity < 1 ? { opacity } : {}),
+      ...(c.filter && c.filter !== "none" ? { filter: c.filter } : {}),
+      ...(backdrop && backdrop !== "none" ? { backdrop } : {}),
+      ...(c.mixBlendMode && c.mixBlendMode !== "normal" ? { blend: c.mixBlendMode } : {}),
+    };
+  };
+  /** Borders per side (CSS often uses only border-top / border-bottom), as one stroke. */
+  const borderOf = (el: HTMLElement, cs: CSSStyleDeclaration): IRNode["stroke"] => {
+    const side = (s: "Top" | "Right" | "Bottom" | "Left") =>
+      cs.getPropertyValue(`border-${s.toLowerCase()}-style`) === "none" ? 0 : px(cs.getPropertyValue(`border-${s.toLowerCase()}-width`));
+    const widths = [side("Top"), side("Right"), side("Bottom"), side("Left")] as [number, number, number, number];
+    const bw = Math.max(...widths);
+    if (bw <= 0) return undefined;
+    const sides = ["Top", "Right", "Bottom", "Left"] as const;
+    const colorSide = sides[widths.indexOf(bw)]!;
+    // A transparent border still takes space in the CSS box model; keep it as an invisible stroke.
+    const bc = hex(cs.getPropertyValue(`border-${colorSide.toLowerCase()}-color`)) ?? "#00000000";
+    const token =
+      tokenIn(declared(el, "border-color")) ??
+      tokenIn(declared(el, "border")) ??
+      tokenIn(declared(el, `border-${colorSide.toLowerCase()}-color`)) ??
+      tokenIn(declared(el, `border-${colorSide.toLowerCase()}`));
+    // Dashed / dotted borders: dash and gap as the browser draws them (3 × width; dots one width apart).
+    const style = cs.getPropertyValue(`border-${colorSide.toLowerCase()}-style`);
+    const dash: [number, number] | undefined = style === "dashed" ? [bw * 3, bw * 3] : style === "dotted" ? [bw, bw] : undefined;
+    return {
+      color: tok(bc, token),
+      width: bw,
+      ...(widths.some((w) => w !== bw) ? { sides: widths } : {}),
+      ...(dash ? { dash } : {}),
+    };
+  };
+  /** A text-shadow, as a shadow on the text layer (glow, hero text over a picture). */
+  const textShadowOf = (c: CSSStyleDeclaration): Pick<IRNode, "shadow"> =>
+    c.textShadow && c.textShadow !== "none" ? { shadow: c.textShadow } : {};
+  /** SVG presentation properties the browser computes from CSS, written back as attributes (see bakeSvg). */
+  const SVG_PROPS = [
+    "fill",
+    "fill-opacity",
+    "fill-rule",
+    "stroke",
+    "stroke-width",
+    "stroke-opacity",
+    "stroke-linecap",
+    "stroke-linejoin",
+    "stroke-dasharray",
+    "stroke-dashoffset",
+    "stop-color",
+    "stop-opacity",
+    "opacity",
+  ] as const;
+  const SHAPES = /^(path|circle|rect|ellipse|line|polyline|polygon|text|tspan|g|use|stop|svg)$/i;
+  /** A computed SVG value as an attribute Figma reads: url("#a") → url(#a), "1.5px" → "1.5". */
+  const svgValue = (prop: string, v: string) =>
+    v
+      .replace(/url\("?([^")]+)"?\)/g, "url($1)")
+      .replace(/^(-?[\d.]+)px$/, prop === "stroke-dasharray" ? "$1" : "$1")
+      .replace(/(\d)px/g, "$1");
+  /**
+   * Each element of the copy gets the presentation the browser computed for its original (as attributes, out of
+   * its style), elements CSS hides are dropped, and <use href="#id"> is replaced by the shapes it points at.
+   */
+  const bakeSvg = (orig: Element, copy: Element) => {
+    const originals = [orig, ...Array.from(orig.querySelectorAll("*"))];
+    const copies = [copy, ...Array.from(copy.querySelectorAll("*"))];
+    const drop: Element[] = [];
+    originals.forEach((o, i) => {
+      const c = copies[i];
+      if (!c || !SHAPES.test(o.tagName) || (o.closest("defs, symbol, clipPath, mask, pattern, marker") && o.tagName !== "stop")) return;
+      const ocs = getComputedStyle(o);
+      if (o !== orig && (ocs.display === "none" || ocs.visibility === "hidden")) {
+        drop.push(c);
+        return;
+      }
+      for (const prop of SVG_PROPS) {
+        if (o === orig && prop === "opacity") continue; // the drawing's own opacity is the layer's
+        const v = ocs.getPropertyValue(prop);
+        if (!v || (prop === "opacity" && v === "1")) continue;
+        c.setAttribute(prop, svgValue(prop, v));
+        (c as SVGElement).style?.removeProperty(prop);
+      }
+    });
+    for (const d of drop) d.remove();
+    // Sprites: <use> → a group holding the symbol's shapes, placed and scaled as the browser does.
+    const uses = Array.from(copy.querySelectorAll("use"));
+    const origUses = Array.from(orig.querySelectorAll("use"));
+    uses.forEach((u, i) => {
+      const ou = origUses[i];
+      const href = u.getAttribute("href") ?? u.getAttribute("xlink:href") ?? "";
+      const target = href.startsWith("#") ? document.getElementById(href.slice(1)) : null;
+      if (!ou || !target) return;
+      const ucs = getComputedStyle(ou);
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      for (const prop of SVG_PROPS) {
+        const v = u.getAttribute(prop);
+        if (v) g.setAttribute(prop, v);
+      }
+      const x = parseFloat(u.getAttribute("x") ?? "0") || 0;
+      const y = parseFloat(u.getAttribute("y") ?? "0") || 0;
+      let transform = `translate(${x} ${y})`;
+      const vb = target
+        .getAttribute("viewBox")
+        ?.split(/[\s,]+/)
+        .map(Number);
+      const w = parseFloat(u.getAttribute("width") ?? "") || (ou as SVGGraphicsElement).getBBox?.().width || 0;
+      const h = parseFloat(u.getAttribute("height") ?? "") || (ou as SVGGraphicsElement).getBBox?.().height || 0;
+      if (target.tagName.toLowerCase() === "symbol" && vb?.length === 4 && vb[2]! > 0 && vb[3]! > 0) {
+        // The use's own size, else the drawing's (width/height 100% of it).
+        const svgBox = (orig as SVGSVGElement).viewBox?.baseVal;
+        const W = parseFloat(u.getAttribute("width") ?? "") || svgBox?.width || w || vb[2]!;
+        const H = parseFloat(u.getAttribute("height") ?? "") || svgBox?.height || h || vb[3]!;
+        const k = Math.min(W / vb[2]!, H / vb[3]!);
+        transform += ` translate(${(W - vb[2]! * k) / 2} ${(H - vb[3]! * k) / 2}) scale(${k}) translate(${-vb[0]!} ${-vb[1]!})`;
+      }
+      g.setAttribute("transform", `${u.getAttribute("transform") ?? ""} ${transform}`.trim());
+      const shapes = target.tagName.toLowerCase() === "symbol" ? Array.from(target.childNodes) : [target];
+      const colour = hex(ucs.color) ?? "#000000";
+      for (const sh of shapes) {
+        const clone = sh.cloneNode(true) as Element;
+        if (clone.nodeType !== 1) continue;
+        clone.removeAttribute("id");
+        // What the shapes don't set themselves comes from the <use> (fill, stroke, colour inherit from it).
+        for (const e of [clone, ...Array.from(clone.querySelectorAll("*"))])
+          for (const prop of ["fill", "stroke"]) if (e.getAttribute(prop) === "currentColor") e.setAttribute(prop, colour);
+        g.appendChild(clone);
+      }
+      for (const prop of ["fill", "stroke", "stroke-width"]) {
+        const v = ucs.getPropertyValue(prop);
+        if (v && !g.getAttribute(prop)) g.setAttribute(prop, svgValue(prop, v));
+      }
+      u.replaceWith(g);
+    });
+  };
+  /** min/max width and height set in pixels (see IRNode.limits); percentages and "none" are left to the layout. */
+  const limitsOf = (c: CSSStyleDeclaration): Pick<IRNode, "limits"> => {
+    const at = (v: string, min: boolean) => (/px$/.test(v) && (!min || parseFloat(v) > 0) ? round(parseFloat(v)) : undefined);
+    const l = { minW: at(c.minWidth, true), maxW: at(c.maxWidth, false), minH: at(c.minHeight, true), maxH: at(c.maxHeight, false) };
+    const set = Object.fromEntries(Object.entries(l).filter(([, v]) => v !== undefined));
+    return Object.keys(set).length ? { limits: set } : {};
+  };
+  /** Not drawn but taking room (visibility: hidden, or opacity 0, in the flow): an empty layer its size. */
+  const invisible = (c: CSSStyleDeclaration) =>
+    (c.visibility === "hidden" || c.visibility === "collapse" || parseFloat(c.opacity) === 0) &&
+    c.position !== "absolute" &&
+    c.position !== "fixed";
   const walk = (el: HTMLElement): IRNode => {
     const cs = getComputedStyle(el);
     const rect = before.get(el) ?? el.getBoundingClientRect();
@@ -784,9 +1277,26 @@ export function extractInPage(): IRNode {
       ...(moduleOf(el) ? { module: moduleOf(el) } : {}),
       // Its classes (Tailwind's included): the compiler tells components apart by them where no CSS module does.
       ...(el.getAttribute("class")?.trim() ? { cls: [...new Set(el.getAttribute("class")!.trim().split(/\s+/))].sort().join(" ") } : {}),
+      ...limitsOf(cs),
       at: place(rect),
     };
-    if (el.tagName === "IMG") return { ...base, type: "IMAGE", fill: tok("#e0e7ff"), ...rasterize(el as HTMLImageElement, cs) };
+    // Hidden but in the flow: the room it takes, nothing drawn (unless something inside it is shown again).
+    const shownAgain =
+      parseFloat(cs.opacity) !== 0 && [...el.querySelectorAll("*")].some((d) => getComputedStyle(d).visibility === "visible");
+    if (invisible(cs) && !shownAgain) return { ...base, type: "FRAME" };
+    if (el.tagName === "IMG" || el.tagName === "VIDEO")
+      return {
+        ...base,
+        type: "IMAGE",
+        // A video without a frame or poster to show is drawn black, as the browser draws it.
+        fill: tok(el.tagName === "VIDEO" ? "#000000" : "#e0e7ff"),
+        ...rasterize(el as HTMLImageElement, cs),
+        // Rounded, bordered, shadowed or faded like any box (round avatars, rounded thumbnails).
+        ...cornersOf(cs, base.width, base.height, tokenIn(declared(el, "border-radius"))),
+        ...overlayOf(cs),
+        ...(borderOf(el, cs) ? { stroke: borderOf(el, cs) } : {}),
+        ...(cs.boxShadow !== "none" ? { shadow: cs.boxShadow } : {}),
+      };
     // A native checkbox or radio button is drawn by the browser (no background or border to read): drawn
     // here as it looks, ticked in the accent colour when checked (Live showed them empty, ticks missing).
     if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio") && cs.appearance !== "none")
@@ -797,6 +1307,10 @@ export function extractInPage(): IRNode {
       const copy = el.cloneNode(true) as SVGSVGElement;
       copy.setAttribute("width", String(base.width));
       copy.setAttribute("height", String(base.height));
+      // Styled by CSS (Tailwind's fill-*/stroke-*, CSS modules, custom properties, :hover-free rules): Figma reads
+      // only the markup, and drew such shapes black or without their lines. Each element gets what the browser
+      // drew, as attributes; sprite icons (<use href="#…">) get the shapes they point at, inlined.
+      bakeSvg(el, copy);
       if (!copy.getAttribute("viewBox")) {
         const w0 = parseFloat(el.getAttribute("width") ?? "");
         const h0 = parseFloat(el.getAttribute("height") ?? "");
@@ -805,14 +1319,15 @@ export function extractInPage(): IRNode {
           copy.setAttribute("viewBox", `0 0 ${w0} ${h0}`);
       }
       const svg = copy.outerHTML.replace(/currentColor/g, hex(cs.color) ?? "#000000");
-      return { ...base, type: "SVG", svg };
+      // Faded, blended or with a drop-shadow as drawn: Figma's import of the drawing doesn't carry them.
+      return { ...base, type: "SVG", svg, ...overlayOf(cs), ...(cs.boxShadow !== "none" ? { shadow: cs.boxShadow } : {}) };
     }
     const flow = flowNodes(el);
     // Not drawn by the browser: display none, hidden, or fully transparent (a native radio kept for the keyboard
     // under a custom one, opacity 0: Live drew it as a loose circle beside every option).
     const shown = (c: Element) => {
       const k = getComputedStyle(c);
-      return k.display !== "none" && k.visibility !== "hidden" && parseFloat(k.opacity) !== 0;
+      return k.display !== "none" && ((k.visibility !== "hidden" && parseFloat(k.opacity) !== 0) || invisible(k));
     };
     const elementKids = flow.filter(
       (c) => c.nodeType === Node.ELEMENT_NODE && shown(c as Element) && !screenReaderOnly(c as HTMLElement),
@@ -826,9 +1341,19 @@ export function extractInPage(): IRNode {
         .join(""),
       cs.whiteSpace,
     );
-    const hasBox = !!hex(cs.backgroundColor) || px(cs.borderTopWidth) > 0 || px(cs.paddingTop) + px(cs.paddingLeft) > 0;
+    // Any side counts: an answer padded only below and to the right (0 40px 20px 0) was a bare text layer with
+    // the padding in its height, held at the component's two-line height where the page needs one line.
+    // A gradient or picture background, or a shadow, is a box too (an avatar's gradient circle with its initials:
+    // read as bare text, Live drew "SJ" with no circle).
+    const hasBox =
+      !!hex(cs.backgroundColor) ||
+      cs.backgroundImage !== "none" ||
+      cs.boxShadow !== "none" ||
+      [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth, cs.borderLeftWidth].some((w) => px(w) > 0) ||
+      [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].some((w) => px(w) > 0);
     if (elementKids.length === 0 && ownText && !hasBox) {
-      const text = textOf(el, cs, markerOf(el, cs) + ownText);
+      // Text CSS adds before or after it (a required "*", a separator) is drawn as part of it.
+      const text = textOf(el, cs, markerOf(el, cs) + inlinePseudo(el, "::before") + ownText + inlinePseudo(el, "::after"));
       // Text the browser wraps onto several lines, or cuts with "…", has a width it must keep in Figma:
       // it fills its column (M6: chat bubbles ran on one line, list previews wrapped instead of "…").
       const lineH = text.lineHeight || renderedLineHeight(el) || 1;
@@ -841,13 +1366,13 @@ export function extractInPage(): IRNode {
       const placedInBlock = !!text.align && text.align !== "JUSTIFIED" && blockInFlow(el, cs);
       const constrained = lines > 1 || (text.maxLines ?? 0) > 1 || (text.maxLines === 1 && cut) || placedInBlock;
       const sizing = constrained && base.sizing.w === "hug" ? { ...base.sizing, w: "fill" as const } : base.sizing;
-      return { ...base, sizing, name: nameOf(el, "text"), type: "TEXT", text };
+      return { ...base, sizing, name: nameOf(el, "text"), type: "TEXT", text, ...overlayOf(cs), ...textShadowOf(cs) };
     }
     const para = paragraph(el, cs, elementKids);
     if (para && !hasBox) {
       const placed = !!para.text.align && para.text.align !== "JUSTIFIED" && blockInFlow(el, cs);
       const sizing = (para.lines > 1 || placed) && base.sizing.w === "hug" ? { ...base.sizing, w: "fill" as const } : base.sizing;
-      return { ...base, sizing, name: nameOf(el, "text"), type: "TEXT", text: para.text };
+      return { ...base, sizing, name: nameOf(el, "text"), type: "TEXT", text: para.text, ...overlayOf(cs), ...textShadowOf(cs) };
     }
 
     const node: IRNode = { ...base, type: "FRAME" };
@@ -938,37 +1463,20 @@ export function extractInPage(): IRNode {
       };
     const bg = hex(cs.backgroundColor);
     if (bg) node.fill = tok(bg, tokenIn(declared(el, "background")) ?? tokenIn(declared(el, "background-color")));
-    const gradient = linearGradient(cs.backgroundImage, declared(el, "background") || declared(el, "background-image"));
+    // One linear gradient stays a gradient (editable in Figma); pictures, other gradients and stacks are drawn.
+    const bgi = cs.backgroundImage;
+    const layered = bgi !== "none" && (/url\(|radial-gradient|conic-gradient|repeating-/.test(bgi) || splitTop(bgi).length > 1);
+    const painted = layered ? paintBackground(cs, base.width, base.height) : undefined;
+    if (painted) node.background = { png: painted };
+    const gradient = painted ? undefined : linearGradient(bgi, declared(el, "background") || declared(el, "background-image"));
     if (gradient) node.gradient = gradient;
-    // Borders per side (CSS often uses only border-top / border-bottom).
-    const side = (s: "Top" | "Right" | "Bottom" | "Left") =>
-      cs.getPropertyValue(`border-${s.toLowerCase()}-style`) === "none" ? 0 : px(cs.getPropertyValue(`border-${s.toLowerCase()}-width`));
-    const widths = [side("Top"), side("Right"), side("Bottom"), side("Left")] as [number, number, number, number];
-    const bw = Math.max(...widths);
-    if (bw > 0) {
-      const sides = ["Top", "Right", "Bottom", "Left"] as const;
-      const colorSide = sides[widths.indexOf(bw)]!;
-      // A transparent border still takes space in the CSS box model; keep it as an invisible stroke.
-      const bc = hex(cs.getPropertyValue(`border-${colorSide.toLowerCase()}-color`)) ?? "#00000000";
-      const token =
-        tokenIn(declared(el, "border-color")) ??
-        tokenIn(declared(el, "border")) ??
-        tokenIn(declared(el, `border-${colorSide.toLowerCase()}-color`)) ??
-        tokenIn(declared(el, `border-${colorSide.toLowerCase()}`));
-      // Dashed / dotted borders: dash and gap as the browser draws them (3 × width; dots one width apart).
-      const style = cs.getPropertyValue(`border-${colorSide.toLowerCase()}-style`);
-      const dash: [number, number] | undefined = style === "dashed" ? [bw * 3, bw * 3] : style === "dotted" ? [bw, bw] : undefined;
-      node.stroke = {
-        color: tok(bc, token),
-        width: bw,
-        ...(widths.some((w) => w !== bw) ? { sides: widths } : {}),
-        ...(dash ? { dash } : {}),
-      };
-    }
-    const radius = px(cs.borderTopLeftRadius);
-    if (radius > 0) node.radius = tok(Math.min(radius, 9999), tokenIn(declared(el, "border-radius")));
-    const opacity = parseFloat(cs.opacity);
-    if (opacity < 1) node.opacity = opacity;
+    const stroke = borderOf(el, cs);
+    if (stroke) node.stroke = stroke;
+    Object.assign(node, cornersOf(cs, base.width, base.height, tokenIn(declared(el, "border-radius"))), overlayOf(cs));
+    // An outline (a focus ring, a selected state): drawn outside the box.
+    const ow = cs.outlineStyle === "none" ? 0 : px(cs.outlineWidth);
+    const oc = hex(cs.outlineColor);
+    if (ow > 0 && oc && !(oc.length === 9 && oc.endsWith("00"))) node.outline = { color: oc, width: ow };
     // Clips what doesn't fit, as the browser does: hidden, and scrolling boxes (auto, scroll) too.
     if ([cs.overflowX, cs.overflowY].some((o) => o !== "visible")) node.clip = true;
     if (cs.boxShadow !== "none") node.shadow = cs.boxShadow;
@@ -1016,8 +1524,11 @@ export function extractInPage(): IRNode {
         const lineH = text.lineHeight || renderedLineHeight(el) || px(cs.fontSize) * 1.2;
         const height = tag === "TEXTAREA" ? box.h : round(Math.min(box.h, lineH));
         // A date field: Chrome draws its calendar button at the right (Live showed the bare value).
-        const calendar = PICKERS.has(type) && cs.getPropertyValue("-webkit-appearance") !== "none";
-        if (calendar && node.layout) {
+        const native = cs.getPropertyValue("-webkit-appearance") !== "none" && cs.appearance !== "none";
+        const calendar = PICKERS.has(type) && native;
+        // A native select: Chrome draws its chevron at the right (an appearance: none select draws its own, if any).
+        const chevron = tag === "SELECT" && native && !f.multiple && f.size <= 1;
+        if ((calendar || chevron) && node.layout) {
           node.layout.direction = "HORIZONTAL";
           node.layout.align = "CENTER";
           node.layout.justify = "MIN";
@@ -1037,16 +1548,18 @@ export function extractInPage(): IRNode {
             },
           },
         ];
-        if (calendar) {
+        if (calendar || chevron) {
           const c = hex(cs.color) ?? "#000000";
           node.children[0]!.width = round(box.w - 20);
           node.children.push({
-            name: "calendar",
+            name: calendar ? "calendar" : "chevron",
             type: "SVG",
             width: 16,
             height: 16,
             sizing: { w: "fixed", h: "fixed" },
-            svg: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1" fill="none" stroke="${c}"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" stroke="${c}"/></svg>`,
+            svg: calendar
+              ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1" fill="none" stroke="${c}"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" stroke="${c}"/></svg>`
+              : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="${c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
             at: {
               x: round(rect.right - rootBox.left - px(cs.paddingRight) - px(cs.borderRightWidth) - 16),
               y: round(rect.top - rootBox.top + (rect.height - 16) / 2),
@@ -1152,8 +1665,8 @@ export function extractInPage(): IRNode {
         });
       }
     }
-    // Boxes CSS draws with ::before / ::after (an active tab's underline, a dot, a divider): layers of their own,
-    // placed where they're drawn (Live had no underline under the selected tab). Only boxes, not generated text.
+    // What CSS draws with ::before / ::after (an active tab's underline, a dot, a divider, a badge, a quote mark):
+    // layers of their own, placed where they're drawn (Live had no underline under the selected tab).
     for (const which of ["::before", "::after"] as const) {
       const box = pseudoBox(el, cs, which);
       if (box) which === "::before" ? children.unshift(box) : children.push(box);
@@ -1221,6 +1734,67 @@ export function extractInPage(): IRNode {
         const m = Math.min(...inFlow.map((k) => px(getComputedStyle(k).getPropertyValue(`margin-${name}`))));
         if (m > 0) node.layout.padding[i] = tok(round(node.layout.padding[i].value + m));
       }
+    }
+    // Children centred in a column (margin: 0 auto on a max-width section, in a block or a flex column): the
+    // column centres them. Figma put a fixed-width child of a stretching column at its left (an 800px FAQ section
+    // at the page's left edge). Only when every child that doesn't fill sits centred: one at the left keeps the
+    // column as it is.
+    if (node.layout?.direction === "VERTICAL" && node.layout.align === "STRETCH" && node.at && node.children?.length) {
+      const left = node.at.x + px(cs.borderLeftWidth) + node.layout.padding[3].value;
+      const right = node.at.x + node.width - px(cs.borderRightWidth) - node.layout.padding[1].value;
+      const boxed = node.children.filter((c) => !c.absolute && c.sizing.w !== "fill" && c.at);
+      const centred = (c: IRNode) => Math.abs(c.at!.x - left - (right - c.at!.x - c.width)) < 1;
+      if (boxed.length && boxed.every(centred) && boxed.some((c) => c.at!.x - left > 1)) node.layout.align = "CENTER";
+    }
+    // A child placed across the row or column against its parent's alignment (align-self: flex-start in a centred
+    // column, a chat bubble at the end with align-self: flex-end): Figma aligns every child of a frame alike (Live
+    // centred the "Live preview" label and stretched the user's bubble across the chat). Such a child goes in a
+    // thin frame across the parent ("<layer>-align") that places it where the browser does.
+    // Not in a row that wraps: there each line aligns its own children (a card on the second line isn't at the end).
+    if (
+      flex &&
+      node.layout &&
+      node.layout.direction !== "GRID" &&
+      !node.layout.wrap &&
+      node.layout.align !== "BASELINE" &&
+      node.at &&
+      node.children?.length
+    ) {
+      const col = node.layout.direction === "VERTICAL";
+      const pad = node.layout.padding;
+      const start = col ? node.at.x + px(cs.borderLeftWidth) + pad[3].value : node.at.y + px(cs.borderTopWidth) + pad[0].value;
+      const end = col
+        ? node.at.x + node.width - px(cs.borderRightWidth) - pad[1].value
+        : node.at.y + node.height - px(cs.borderBottomWidth) - pad[2].value;
+      // Where Figma puts a child that doesn't fill: "stretch" lays out as the start.
+      const figmaPlaces = node.layout.align === "STRETCH" ? "MIN" : node.layout.align;
+      node.children = node.children.map((c): IRNode => {
+        const [cross, along] = col ? [c.sizing.w, c.sizing.h] : [c.sizing.h, c.sizing.w];
+        if (c.absolute || cross === "fill" || along === "fill" || !c.at) return c;
+        const room = end - start - (col ? c.width : c.height);
+        if (room < 2) return c;
+        const off = (col ? c.at.x : c.at.y) - start;
+        const near = (x: number) => Math.abs(off - x) < 1.5;
+        const placed = near(0) ? "MIN" : near(room) ? "MAX" : near(room / 2) ? "CENTER" : null;
+        if (!placed || placed === figmaPlaces) return c;
+        const across = round(end - start);
+        return {
+          name: `${c.name}-align`,
+          type: "FRAME",
+          width: col ? across : c.width,
+          height: col ? c.height : across,
+          sizing: col ? { w: "fill", h: "hug" } : { w: "hug", h: "fill" },
+          layout: {
+            direction: col ? "HORIZONTAL" : "VERTICAL",
+            gap: tok(0),
+            padding: [tok(0), tok(0), tok(0), tok(0)],
+            align: "MIN",
+            justify: placed,
+          },
+          at: col ? { x: round(start), y: c.at.y } : { x: c.at.x, y: round(start) },
+          children: [c],
+        };
+      });
     }
     return scrolled(el, cs, node);
   };

@@ -67,6 +67,38 @@ export function forgetProject() {
   root().setSharedPluginData(NS, ROOT.meta, "");
 }
 
+/** What clearing this file would take out: which of our pages it has, and the designs on Proposals. */
+export async function fileContents() {
+  await figma.loadAllPagesAsync();
+  const has = (name: string) => figma.root.children.find((p) => p.name === name);
+  const proposals = has(LAYOUT.proposals.page);
+  // Designs on Proposals: the frames in its sections (Active, Archive), screenshots aside.
+  const designs = proposals
+    ? proposals.children
+        .filter((s) => s.type === "SECTION" && s.name !== LAYOUT.proposals.sections.screenshots)
+        .reduce((n, s) => n + ("children" in s ? s.children.length : 0), 0)
+    : 0;
+  return {
+    live: !!has(LAYOUT.live.page),
+    proposals: !!proposals,
+    system: !!has(LAYOUT.system.page),
+    designs,
+    ownPages: figma.root.children.filter((p) => !new Set<string>([LAYOUT.live.page, LAYOUT.proposals.page, LAYOUT.system.page]).has(p.name))
+      .length,
+  };
+}
+
+/**
+ * Clears CoDesignFlo from this file: its pages (Live, Proposals, Design System) go, and so does what the file keeps
+ * about its project (the link, the index, unsent events). The designer's own pages stay. Used by "Quit demo" and by
+ * "Clear this file" / "Use in this file" for another project (after the designer confirms).
+ */
+export async function clearFile() {
+  await resetDemoFile();
+  for (const key of root().getSharedPluginDataKeys(NS))
+    if (key === ROOT.meta || key.startsWith(ROOT.indexPrefix) || key.startsWith(ROOT.eventPrefix)) root().setSharedPluginData(NS, key, "");
+}
+
 /**
  * "Quit demo": the file's CoDesignFlo pages (Live, Proposals, Design System) go and the file no longer belongs to
  * the demo. Only offered on a demo project's file.

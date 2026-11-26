@@ -40,12 +40,28 @@ export type IRNode = {
    * comes from the page; the CLI swaps it for `ref` (content hash) and uploads each picture once.
    */
   image?: { png?: string; ref?: string };
+  /**
+   * FRAME: its CSS background pictures and gradients (anything beyond one linear gradient: url() pictures, radial
+   * and conic gradients, layers stacked), drawn as the browser draws them at the element's size × 2, over `fill`.
+   * Like `image`: `png` from the page, swapped for `ref` by the CLI.
+   */
+  background?: { png?: string; ref?: string };
   /** `sides` (top, right, bottom, left) only when they differ, e.g. a border-top only. */
   stroke?: { color: Tokened<string>; width: number; sides?: [number, number, number, number]; dash?: [number, number] };
   radius?: Tokened<number>;
+  /** Each corner (top-left, top-right, bottom-right, bottom-left) when they differ: tabs, sheets, joined buttons. */
+  radii?: [number, number, number, number];
   opacity?: number;
   clip?: boolean;
+  /** CSS box-shadow (computed); on a text, its text-shadow. */
   shadow?: string;
+  /** CSS filter and backdrop-filter (computed): blurs and drop-shadows become Figma effects. */
+  filter?: string;
+  backdrop?: string;
+  /** CSS mix-blend-mode, when not normal. */
+  blend?: string;
+  /** CSS outline (focus rings, selected states): drawn outside the box. */
+  outline?: { color: string; width: number };
   text?: {
     characters: string;
     fontFamily: string;
@@ -61,6 +77,10 @@ export type IRNode = {
     case?: "UPPER" | "LOWER" | "TITLE";
     /** Italic (font-style). */
     italic?: true;
+    /** The whole text underlined or struck through (text-decoration-line). */
+    decoration?: "UNDERLINE" | "STRIKETHROUGH";
+    /** Where the text links to (an <a href> around it): a URL, mailto: or tel:, kept as a link in Figma. */
+    link?: string;
     /**
      * Parts styled differently from the rest (a bold email inside a sentence, a link): one text layer, as the
      * paragraph flows in the browser. `start`/`end` index `characters`; only what differs is given.
@@ -75,6 +95,11 @@ export type IRNode = {
    * overlay, a scrim, a badge on a corner). Figma: an absolutely positioned layer in the auto-layout parent.
    */
   absolute?: { x: number; y: number };
+  /**
+   * CSS min/max width and height in pixels, on a layer that fills or hugs: Figma keeps them when a designer resizes
+   * (a card that fills its column but stops at 480, a button never narrower than 96).
+   */
+  limits?: { minW?: number; maxW?: number; minH?: number; maxH?: number };
   /** An iframe: its index among the page's iframes (the CLI reads what it shows into its children). */
   iframe?: number;
   /** No semantic name in code (no data-cdf, no CSS-module class): named after its tag for now. */
@@ -100,4 +125,7 @@ export type TextRun = {
   fontSize?: number;
   color?: string;
   underline?: boolean;
+  strikethrough?: boolean;
+  /** Where this part links to (an <a href> inside the paragraph); "" for a part outside the text's own link. */
+  link?: string;
 };

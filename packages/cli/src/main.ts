@@ -109,7 +109,8 @@ const commands: Record<string, { summary: string; run: (args: string[]) => Promi
     run: () => delta(),
   },
   verify: {
-    summary: "compare Live with the code, variant by variant (browser vs Figma images) [component…] [--screens] [--strict]",
+    summary:
+      "compare Live with the code, variant by variant (browser vs Figma images) [component…] [--screens] [--widths=1280,768,375] [--strict]",
     run: (a) => verify(a),
   },
   name: { summary: "give unnamed elements semantic layer names in code (data-cdf) with Claude Code [--check]", run: (a) => nameCommand(a) },

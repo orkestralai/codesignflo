@@ -577,6 +577,42 @@ function newDesignBox() {
   </div>`;
 }
 
+/**
+ * A newer plugin than this one, from the service (/api/plugin): the plugin isn't on Figma Community, which would
+ * update it, so the panel says when one is out and how to put it in place.
+ */
+let newerPlugin: { version: string; download: string } | null = null;
+/** a > b, for versions like 0.5.1 (numbers compared part by part; a pre-release suffix is ignored). */
+const isNewer = (a: string, b: string) => {
+  const parts = (v: string) =>
+    v
+      .split("-")[0]!
+      .split(".")
+      .map((x) => Number.parseInt(x, 10) || 0);
+  const [x, y] = [parts(a), parts(b)];
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+  return false;
+};
+async function checkPluginVersion() {
+  const web = cloud?.service.web;
+  if (!web) return;
+  try {
+    const r = await fetch(`${web.replace(/\/$/, "")}/api/plugin`, { cache: "no-store" });
+    const b = (await r.json()) as { version?: string; download?: string };
+    const next = b.version && b.download && isNewer(b.version, __VERSION__) ? { version: b.version, download: b.download } : null;
+    if (JSON.stringify(next) !== JSON.stringify(newerPlugin)) {
+      newerPlugin = next;
+      render();
+    }
+  } catch {
+    // offline, or a service without /api/plugin yet: nothing to say
+  }
+}
+function newerPluginNotice(): string {
+  if (!newerPlugin || ctx?.guide[DEMO_PREFS]?.pluginLater === newerPlugin.version) return "";
+  return `<div class="notice"><span><b>CoDesignFlo ${esc(newerPlugin.version)} is out</b> (you have ${esc(__VERSION__)}). Download it, unzip it into the folder you imported the plugin from (replacing its files), then close and reopen the plugin.</span><button type="button" class="primary" data-a="plugin-download">Download</button><button type="button" class="quiet" data-a="plugin-later">Later</button></div>`;
+}
+
 /** The CoDesignFlo service, when this build has one (development: the local Supabase). */
 let cloud: Cloud | null = null;
 
@@ -592,8 +628,11 @@ function renderCloud() {
   const people = cloud.project
     ? `<button type="button" data-a="cloud-people" class="${peopleOpen ? "on" : ""}" title="Who's in ${esc(cloud.project.name)}, and invite">People</button>`
     : "";
+  const projects = view?.setUp
+    ? `<button type="button" data-a="cloud-projects" class="${projectsOpen ? "on" : ""}" title="Your projects: switch this file to another, or clear it">Projects</button>`
+    : "";
   el.innerHTML = cloud.user
-    ? `${guide}${people}<span class="spacer"></span><span class="who" title="Signed in to CoDesignFlo">${esc(cloud.user.email ?? "Signed in")}</span><button type="button" class="quiet" data-a="cloud-signout">Sign out</button>`
+    ? `${guide}${people}${projects}<span class="spacer"></span><span class="who" title="Signed in to CoDesignFlo">${esc(cloud.user.email ?? "Signed in")}</span><button type="button" class="quiet" data-a="cloud-signout">Sign out</button>`
     : `${guide}<span class="spacer"></span>${cloud.code ? `<span class="who">Waiting for approval…</span>` : `<button type="button" class="primary" data-a="cloud-signin">Sign in</button>`}`;
 }
 $("cloud").addEventListener("click", async (ev) => {
@@ -603,9 +642,11 @@ $("cloud").addEventListener("click", async (ev) => {
     if (b.dataset.a === "cloud-signin") await cloud.signIn();
     if (b.dataset.a === "cloud-signout") {
       peopleOpen = false;
+      projectsOpen = false;
       cloud.signOut();
     }
     if (b.dataset.a === "cloud-people") await openPeople(!peopleOpen);
+    if (b.dataset.a === "cloud-projects") await openProjects(!projectsOpen);
     if (b.dataset.a === "guide-open") toggleGuide();
   } catch (e) {
     toast((e as Error).message);
@@ -635,6 +676,30 @@ const figmaHere: Figma = {
 let applying: string | null = null;
 /** Components and pages done so far in the update being applied. */
 let applyProgress: { done: number; total: number } | null = null;
+/** An update a developer's sync applies from their computer (sync --local), as `applying` names it. */
+const LOCAL = "from the developer's computer";
+type LocalProgress = { done: number; total: number; item?: string; finished?: boolean; ok?: boolean };
+/**
+ * A developer's sync updating Live through the connection: the same notice and bar as an update from the service,
+ * step by step (the panel said nothing while components and pages were rebuilt), then how it went.
+ */
+function localProgress(p: LocalProgress) {
+  if (p.finished) {
+    if (applying === LOCAL) {
+      applying = null;
+      applyProgress = null;
+      toast(
+        p.ok === false
+          ? "The developer's sync couldn't update all of Live: they see what went wrong."
+          : "Live updated from code (the developer's sync).",
+      );
+    }
+  } else {
+    applying = LOCAL;
+    applyProgress = { done: p.done, total: p.total };
+  }
+  render();
+}
 let applyingId: number | null = null;
 let billingCheckedAt = 0;
 let lanesCheckedAt = 0;
@@ -809,6 +874,7 @@ async function applyPending() {
   );
   applying = null;
   applyProgress = null;
+  c.reportRefused = null;
   await refresh();
 }
 const applyTimer = setInterval(() => (retiring ? clearInterval(applyTimer) : void applyPending()), 15_000);
@@ -865,6 +931,65 @@ let newProjectName: string | null = null;
 let quitAsk = false;
 let deleteAsk: { id: string; name: string } | null = null;
 
+/**
+ * Projects: every project I'm in, from any file (not only an empty one). This file can switch to another project or
+ * be cleared, after a second confirmation that says what goes.
+ */
+let projectsOpen = false;
+type FileContents = { live: boolean; proposals: boolean; system: boolean; designs: number; ownPages: number };
+let clearAsk: { to: { id: string; name: string } | null; contents: FileContents } | null = null;
+
+async function openProjects(open: boolean) {
+  projectsOpen = open;
+  clearAsk = null;
+  if (open) {
+    peopleOpen = false;
+    guideOpen = false;
+    ds = null;
+    myProjects = cloud ? await cloud.myProjects().catch(() => []) : [];
+  }
+  render();
+}
+
+function clearConfirm(a: NonNullable<typeof clearAsk>): string {
+  const c = a.contents;
+  const goes = [
+    c.live ? "<b>Live</b> (the app's components and pages, rebuilt from the code in whichever file uses the project)" : "",
+    c.proposals
+      ? `<b>Proposals</b>${c.designs ? ` with <b>${c.designs} design${c.designs > 1 ? "s" : ""}</b> on it, including copies not built yet` : ""}`
+      : "",
+    c.system ? "<b>Design System</b> (your Library links to the code)" : "",
+  ].filter(Boolean);
+  const current = cloud?.project?.name;
+  return `<div class="card clear-ask">
+    <div class="what"><b>${a.to ? `Use this file for ${esc(a.to.name)}?` : "Clear CoDesignFlo from this file?"}</b></div>
+    <div class="desc">${a.to ? "This file is cleared first. " : ""}From this file, these go for good:</div>
+    <ul class="goes">${goes.map((g) => `<li>${g}</li>`).join("") || "<li>its link to the project</li>"}</ul>
+    <div class="desc">Your own pages stay${c.ownPages ? ` (${c.ownPages})` : ""}.${current ? ` <b>${esc(current)}</b> itself stays, with its history: open it in another file any time.` : ""} Copy any design you want to keep to your own page first.</div>
+    <div class="actions"><button type="button" class="danger" data-a="clear-yes">${a.to ? `Clear and use ${esc(a.to.name)}` : "Clear this file"}</button><button type="button" data-a="clear-no">Cancel</button></div>
+  </div>`;
+}
+
+function projectsScreen(): string {
+  const list = myProjects ?? [];
+  const here = ctx?.file.projectId;
+  const row = (p: (typeof list)[number]) =>
+    `<div class="person"><span class="who">${esc(p.name)}<span class="role"> · ${p.role} · ${p.has_code ? "app connected" : "no code yet"}${
+      p.project_id === here ? " · this file" : p.file_name ? ` · uses “${esc(p.file_name)}”` : ""
+    }</span></span>${
+      p.project_id === here
+        ? ""
+        : `<button type="button" class="link" data-a="switch-ask" data-p="${esc(p.project_id)}" data-n="${esc(p.name)}">Use in this file…</button>`
+    }${p.role === "admin" && p.project_id !== here ? `<button type="button" class="link danger-link" data-a="delete-project" data-p="${esc(p.project_id)}" data-n="${esc(p.name)}">Delete…</button>` : ""}</div>` +
+    (deleteAsk?.id === p.project_id ? deleteConfirm(deleteAsk) : "");
+  return `<div class="card people">
+    <div class="what"><b>Your projects</b><button type="button" class="link" data-a="projects-close">Done</button></div>
+    ${clearAsk ? clearConfirm(clearAsk) : ""}
+    ${list.length ? list.map(row).join("") : `<div class="hint">You're not in any project yet.</div>`}
+    ${here ? `<div class="actions"><button type="button" data-a="clear-ask">Clear this file…</button></div>` : ""}
+  </div>`;
+}
+
 /** Confirming a project's deletion: everything in it goes, for everyone. */
 const deleteConfirm = (p: { id: string; name: string }) =>
   `<div class="notice warn"><span>Delete <b>${esc(p.name)}</b> for everyone in it? Its history, proposals and members go with it; this can't be undone. The Figma file keeps its pages.</span><button type="button" class="danger" data-a="delete-project-yes" data-p="${esc(p.id)}">Delete</button><button type="button" data-a="delete-project-no">Cancel</button></div>`;
@@ -882,6 +1007,7 @@ async function openPeople(open: boolean) {
   // People, the guide and Design System take the same place: one replaces the other.
   if (open) {
     guideOpen = false;
+    projectsOpen = false;
     ds = null;
   }
   if (open && cloud) people = await cloud.people();
@@ -1856,6 +1982,7 @@ function render() {
       `<div class="notice">Type this code on the sign-in page in your browser, then approve:<span class="code">${cloud.code}</span><button type="button" data-a="cloud-cancel">Cancel</button></div>`,
     );
   if (cloud?.error) parts.push(`<div class="notice warn">${esc(cloud.error)}</div>`);
+  parts.push(newerPluginNotice());
   // A demo project: its own strip, first (what it is, the walkthrough, quitting).
   if (cloud?.project?.demo && view?.setUp)
     parts.push(
@@ -1882,6 +2009,10 @@ function render() {
         ? `<div class="notice">${sendsLeftText(bill.sendsLeft)}. After that, sending designs needs a designer seat (Billing at codesignflo.com); it works in every project.</div>`
         : `<div class="hint sends">${sendsLeftText(bill.sendsLeft)} · a seat: Billing at codesignflo.com</div>`,
     );
+  if (applying && cloud?.reportRefused)
+    parts.push(
+      `<div class="notice warn"><span>The service doesn't count this update as yours (${esc(cloud.reportRefused)}). It still finishes here; if Live doesn't change, close and reopen the plugin.</span></div>`,
+    );
   if (applying)
     parts.push(
       `<div class="notice">${applying.startsWith("preview of") ? `Building the ${esc(applying)}` : `Updating Live from code (${esc(applying)})`}${applyProgress ? `: ${applyProgress.done} of ${applyProgress.total}` : "…"}<span class="busy-bar"><span style="width:${applyProgress ? Math.round((100 * applyProgress.done) / Math.max(1, applyProgress.total)) : 5}%"></span></span></div>`,
@@ -1896,10 +2027,12 @@ function render() {
     parts.push(
       `<div class="notice warn"><span>You're not in this file's project yet. Ask someone in it to invite <b>${esc(cloud.user.email ?? "you")}</b>.</span></div>`,
     );
-  document.body.classList.toggle("screen", !!readyRow || peopleOpen || !!bringIn || guideOpen || !!ds);
+  if (projectsOpen && (!cloud?.user || !view?.setUp)) projectsOpen = false;
+  document.body.classList.toggle("screen", !!readyRow || peopleOpen || projectsOpen || !!bringIn || guideOpen || !!ds);
   if (ds) parts.push(systemScreen());
   else if (guideOpen) parts.push(guideScreen());
   else if (bringIn) parts.push(bringInScreen());
+  else if (projectsOpen) parts.push(projectsScreen());
   else if (peopleOpen) parts.push(peopleScreen());
   else if (readyRow) parts.push(readyScreen(readyRow));
   else if (!view) parts.push(`<div class="hint">Loading…</div>`);
@@ -1958,7 +2091,14 @@ function render() {
   if (focused) {
     const el = document.getElementById(focused.id) as HTMLInputElement | HTMLTextAreaElement | null;
     el?.focus();
-    el?.setSelectionRange(focused.caret[0] ?? 0, focused.caret[1] ?? 0);
+    // Only text fields have a caret: a focused select or button threw "setSelectionRange is not a function" on
+    // every redraw. (An email or number input has the method but refuses it: ignored too.)
+    if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement)
+      try {
+        el.setSelectionRange(focused.caret[0] ?? 0, focused.caret[1] ?? 0);
+      } catch {
+        // a type without a selection (email, number)
+      }
   }
   drawTour();
   const live = cloud?.project?.liveBranch;
@@ -2002,7 +2142,7 @@ async function refresh() {
   view = await act<PanelState>("state");
   if (cloud) cloud.fileName = ctx?.file.name ?? "";
   // An empty file: list my projects once (the developer may have started one for me).
-  if (cloud?.user && !view.setUp && myProjects === null) {
+  if (cloud?.user && (!view.setUp || projectsOpen) && myProjects === null) {
     myProjects = [];
     myProjects = await cloud.myProjects().catch(() => []);
   }
@@ -2338,6 +2478,53 @@ $("main").addEventListener("click", async (ev) => {
       case "people-close":
         await openPeople(false);
         return;
+      case "plugin-download":
+        if (newerPlugin) toMain({ kind: "openExternal", url: newerPlugin.download });
+        return;
+      case "plugin-later":
+        if (!newerPlugin) return;
+        if (ctx) ctx.guide[DEMO_PREFS] = { ...ctx.guide[DEMO_PREFS], pluginLater: newerPlugin.version };
+        toMain({ kind: "guide", projectId: DEMO_PREFS, prefs: { pluginLater: newerPlugin.version } });
+        render();
+        return;
+      case "projects-close":
+        await openProjects(false);
+        return;
+      case "switch-ask":
+      case "clear-ask": {
+        const to = b.dataset.a === "switch-ask" && b.dataset.p ? { id: b.dataset.p, name: b.dataset.n ?? "this project" } : null;
+        clearAsk = { to, contents: await act<FileContents>("fileContents", {}) };
+        render();
+        return;
+      }
+      case "clear-no":
+        clearAsk = null;
+        render();
+        return;
+      case "clear-yes": {
+        if (!cloud || !clearAsk) return;
+        const { to } = clearAsk;
+        // The confirmation goes at once: a second click can't clear twice.
+        clearAsk = null;
+        projectsOpen = false;
+        render();
+        await act("clearFile", {});
+        await cloud.fileChanged(null);
+        myProjects = null;
+        if (to) {
+          await act("setUpFile", { projectId: to.id });
+          toMain({ kind: "getContext" });
+          await cloud.fileChanged(to.id);
+          await cloud.resendLive(to.id);
+          toast(`This file now uses ${to.name}: its components and pages arrive in a moment.`);
+          void applyPending();
+          return;
+        }
+        toast("CoDesignFlo is cleared from this file. Pick or start a project to use it again.");
+        toMain({ kind: "getContext" });
+        await refresh();
+        return;
+      }
       case "invite": {
         const email = inviteEmail.trim();
         if (!cloud || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast("Enter an email address.");
@@ -2401,6 +2588,7 @@ $("main").addEventListener("click", async (ev) => {
         await act("setUpFile", { projectId: b.dataset.p });
         toMain({ kind: "getContext" });
         await cloud.fileChanged(b.dataset.p);
+        await cloud.resendLive(b.dataset.p);
         myProjects = null;
         toast("This file is set up — the app's components and pages arrive in a moment.");
         void applyPending();
@@ -2667,12 +2855,19 @@ function connect() {
       );
       render();
     } else if (msg.t === "req") {
+      if (msg.method === "updateProgress") localProgress(msg.params as LocalProgress);
       toMain({ kind: "req", msg });
     }
   };
   socket.onclose = (ev) => {
     if (ws !== socket) return;
     ws = null;
+    // The developer's sync stopped in the middle of an update: the notice goes, what was built stays.
+    if (applying === LOCAL) {
+      applying = null;
+      applyProgress = null;
+      toast("The developer's sync stopped before Live was fully updated; it carries on next time they sync.");
+    }
     conn(false, "developer offline");
     if (ev.code === protocol.CLOSE_REPLACED) return; // the plugin in another file took over
     // Re-read the file's project id before trying again (it may have been set up meanwhile).
@@ -2722,6 +2917,9 @@ window.onmessage = (ev: MessageEvent<{ pluginMessage?: MainToUi }>) => {
       );
       cloud.onSignal = onProjectSignal;
       void cloud.restore(m.context.file.projectId);
+      // A newer plugin: looked for now and every 6 hours while the plugin stays open.
+      void checkPluginVersion();
+      setInterval(() => void checkPluginVersion(), 6 * 60 * 60_000);
     }
     if (!first && projectChanged) void cloud?.fileChanged(m.context.file.projectId);
     if (first) connect();

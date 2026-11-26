@@ -415,6 +415,15 @@ function look(variant: ComponentNode, props: Record<string, string>): VariantLoo
       .padStart(2, "0");
   const text = (c.type === "TEXT" ? c : "findOne" in c && c.findOne ? c.findOne((n) => n.type === "TEXT") : null) as TextNode | null;
   const font = text && text.fontName !== figma.mixed ? text.fontName.family : undefined;
+  const solid = (paints: unknown) =>
+    Array.isArray(paints) ? (paints as Paint[]).find((p): p is SolidPaint => p.type === "SOLID" && p.visible !== false) : undefined;
+  const rgbHex = (p: SolidPaint) => `#${hex(p.color.r)}${hex(p.color.g)}${hex(p.color.b)}`;
+  const g = c as SceneNode & Partial<GeometryMixin & BlendMixin & AutoLayoutMixin>;
+  const stroke = solid(g.strokes);
+  const weight = typeof g.strokeWeight === "number" ? g.strokeWeight : 0;
+  const shadow = g.effects?.find((e): e is DropShadowEffect => e.type === "DROP_SHADOW" && e.visible);
+  const textFill = text ? solid(text.fills) : undefined;
+  const laidOut = g.layoutMode && g.layoutMode !== "NONE";
   return {
     props,
     w: c.width,
@@ -422,6 +431,15 @@ function look(variant: ComponentNode, props: Record<string, string>): VariantLoo
     ...(typeof c.cornerRadius === "number" ? { radius: c.cornerRadius } : {}),
     ...(fill?.type === "SOLID" ? { fill: `#${hex(fill.color.r)}${hex(fill.color.g)}${hex(fill.color.b)}` } : {}),
     ...(font ? { font } : {}),
+    ...(stroke && weight > 0 ? { stroke: { color: rgbHex(stroke), width: weight } } : {}),
+    ...(shadow ? { shadow: `${Math.round(shadow.offset.x)} ${Math.round(shadow.offset.y)} ${Math.round(shadow.radius)}` } : {}),
+    ...(laidOut
+      ? {
+          padding: [g.paddingTop ?? 0, g.paddingRight ?? 0, g.paddingBottom ?? 0, g.paddingLeft ?? 0] as [number, number, number, number],
+          gap: g.itemSpacing ?? 0,
+        }
+      : {}),
+    ...(textFill ? { textColor: rgbHex(textFill) } : {}),
   };
 }
 

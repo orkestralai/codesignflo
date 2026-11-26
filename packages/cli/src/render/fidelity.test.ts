@@ -326,3 +326,208 @@ describe("drawn as the browser draws it", () => {
     expect(find(root, (x) => x.name === "Wraps")!.layout!.wrap).toBe(true);
   });
 });
+
+describe("a child aligned against its parent (align-self)", () => {
+  const names = (n: IRNode): string[] => [n.name, ...(n.children ?? []).flatMap(names)];
+  it("a label at the start of a centred column goes in a frame across the column that places it at the start", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<div data-cdf="Stage" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px">
+      <span data-cdf="Label" style="align-self:flex-start;padding:4px 12px;background:#fff">Live preview</span>
+      <div data-cdf="Phone" style="width:200px;height:120px;background:#000"></div></div>`);
+    const stage = find(root, (x) => x.name === "Stage")!;
+    expect(stage.layout?.align).toBe("CENTER");
+    const wrap = find(stage, (x) => x.name === "Label-align")!;
+    expect(wrap.layout).toMatchObject({ direction: "HORIZONTAL", justify: "MIN" });
+    expect(wrap.sizing.w).toBe("fill");
+    expect(wrap.children?.[0]?.name).toBe("Label");
+    // The phone follows the column (centred): left as it is.
+    expect(names(stage)).not.toContain("Phone-align");
+  });
+  it("a chat bubble at the end of a stretching column is placed at the end", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<div data-cdf="Chat" style="display:flex;flex-direction:column;gap:8px;padding:12px">
+      <p data-cdf="Bot" style="margin:0;max-width:200px;padding:8px">Hey there!</p>
+      <p data-cdf="User" style="margin:0;max-width:200px;padding:8px;align-self:flex-end">Best zucchini bread recipe?</p></div>`);
+    const chat = find(root, (x) => x.name === "Chat")!;
+    const wrap = find(chat, (x) => x.name === "User-align")!;
+    expect(wrap.layout).toMatchObject({ direction: "HORIZONTAL", justify: "MAX" });
+    expect(names(chat)).not.toContain("Bot-align");
+  });
+  it("a row's child at the bottom while the row centres goes in a frame down the row", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<div data-cdf="Row" style="display:flex;align-items:center;height:80px;gap:8px">
+      <span data-cdf="Icon" style="width:20px;height:20px;background:#000"></span>
+      <span data-cdf="Tag" style="align-self:flex-end;height:16px">new</span></div>`);
+    const wrap = find(root, (x) => x.name === "Tag-align")!;
+    expect(wrap.layout).toMatchObject({ direction: "VERTICAL", justify: "MAX" });
+    expect(wrap.sizing.h).toBe("fill");
+  });
+});
+
+describe("how things look beyond fill and border", () => {
+  it("a round avatar picture keeps its radius, border, shadow and opacity", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(
+      `<img data-cdf="Avatar" width="40" height="40" style="border-radius:50%;border:2px solid #ff0000;box-shadow:0 1px 2px #0003;opacity:.5" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==">`,
+    );
+    const img = find(root, (x) => x.name === "Avatar")!;
+    expect(img.type).toBe("IMAGE");
+    expect(img.radius?.value).toBe(22);
+    expect(img.stroke).toMatchObject({ width: 2 });
+    expect(img.shadow).toBeTruthy();
+    expect(img.opacity).toBe(0.5);
+  });
+  it("corners rounded differently are kept per corner", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<div data-cdf="Tab" style="height:30px;background:#eee;border-radius:8px 8px 0 0"></div>`);
+    expect(find(root, (x) => x.name === "Tab")!.radii).toEqual([8, 8, 0, 0]);
+  });
+  it("filters, backdrop blur, blending and an outline are read", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(
+      `<div data-cdf="Glass" style="height:30px;background:#fff8;backdrop-filter:blur(8px);filter:blur(2px);mix-blend-mode:multiply;outline:2px solid #00ff00"></div>`,
+    );
+    const g = find(root, (x) => x.name === "Glass")!;
+    expect(g.backdrop).toContain("blur");
+    expect(g.filter).toContain("blur");
+    expect(g.blend).toBe("multiply");
+    expect(g.outline).toEqual({ color: "#00ff00", width: 2 });
+  });
+  it("text keeps its shadow, and underline or strikethrough from an inline parent", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(
+      `<h1 data-cdf="Hero" style="text-shadow:0 2px 4px #0008;margin:0">Big</h1><a href="#" style="text-decoration:underline"><span data-cdf="Link">Open</span></a><p data-cdf="Old" style="text-decoration:line-through;margin:0">$20</p>`,
+    );
+    expect(find(root, (x) => x.name === "Hero")!.shadow).toContain("4px");
+    expect(find(root, (x) => x.name === "Old")!.text?.decoration).toBe("STRIKETHROUGH");
+    const link = find(root, (x) => x.type === "TEXT" && x.text?.characters === "Open")!;
+    expect(link.text?.decoration).toBe("UNDERLINE");
+  });
+  it("an element hidden but in the flow keeps its room, drawn empty", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(
+      `<div style="display:flex;flex-direction:column"><div data-cdf="Ghost" style="visibility:hidden;height:24px;background:#f00">Saved</div><div data-cdf="Faded" style="opacity:0;height:10px"></div><p style="margin:0">After</p></div>`,
+    );
+    const ghost = find(root, (x) => x.name === "Ghost")!;
+    expect(ghost).toMatchObject({ type: "FRAME", height: 24 });
+    expect(ghost.fill).toBeUndefined();
+    expect(ghost.children ?? []).toEqual([]);
+    expect(find(root, (x) => x.name === "Faded")?.height).toBe(10);
+  });
+  it("a native select shows its chevron", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<select data-cdf="Plan" style="width:160px"><option>Monthly</option></select>`);
+    const sel = find(root, (x) => x.name === "Plan")!;
+    expect(sel.children?.map((c) => c.name)).toEqual(["value", "chevron"]);
+  });
+});
+
+describe("drawings styled by CSS", () => {
+  it("fill and stroke from classes become attributes; shapes CSS hides are left out", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<style>.ico path{fill:#ff0000;stroke:#0000ff;stroke-width:3px}.ico .off{display:none}</style>
+      <svg data-cdf="Icon" class="ico" width="20" height="20" viewBox="0 0 20 20"><path d="M0 0h10v10z"/><circle class="off" cx="5" cy="5" r="2"/></svg>`);
+    const svg = find(root, (x) => x.name === "Icon")!.svg!;
+    expect(svg).toMatch(/<path[^>]*fill="rgb\(255, 0, 0\)"/);
+    expect(svg).toMatch(/stroke-width="3"/);
+    expect(svg).not.toContain("<circle");
+  });
+  it("a sprite icon (<use href>) gets the shapes it points at, in its colour", async (t) => {
+    if (!browser) return t.skip();
+    const root =
+      await extract(`<svg style="display:none"><symbol id="star" viewBox="0 0 10 10"><path fill="currentColor" d="M0 0h10v10z"/></symbol></svg>
+      <svg data-cdf="Star" width="20" height="20" style="color:#00ff00"><use href="#star"/></svg>`);
+    const svg = find(root, (x) => x.name === "Star")!.svg!;
+    expect(svg).not.toContain("<use");
+    expect(svg).toContain('d="M0 0h10v10z"');
+    expect(svg).toMatch(/fill="#00ff00"/);
+    expect(svg).toContain("scale(2)");
+  });
+});
+
+describe("what CSS adds with ::before and ::after", () => {
+  it("a required label's * is part of its text; icon-font glyphs are left out", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<style>.req::after{content:" *";color:red}.ico::before{content:"\\e900"}</style>
+      <label data-cdf="Name" class="req">Name</label><span data-cdf="Go" class="ico">Go</span>`);
+    expect(find(root, (x) => x.name === "Name")!.text?.characters).toBe("Name *");
+    expect(find(root, (x) => x.name === "Go")!.text?.characters).toBe("Go");
+  });
+  it("a badge drawn with ::after is a box with its text, placed with its translate", async (t) => {
+    if (!browser) return t.skip();
+    const root =
+      await extract(`<style>.tab{position:relative;display:flex;padding:8px}.tab::after{content:"New";position:absolute;top:0;right:0;transform:translate(4px,-4px);background:#ff0000;padding:0 4px;font:10px/14px sans-serif}</style>
+      <div data-cdf="Tab" class="tab"><span>Inbox</span><span>3</span></div>`);
+    const tab = find(root, (x) => x.name === "Tab")!;
+    const badge = tab.children!.find((c) => c.name === "after")!;
+    expect(badge.type).toBe("FRAME");
+    expect(badge.fill?.value).toBe("#ff0000");
+    expect(badge.children?.[0]?.text?.characters).toBe("New");
+    expect(badge.absolute!.y).toBe(-4);
+  });
+});
+
+describe("the font the text is drawn in", () => {
+  it("a web font that didn't load is passed over for the next in the stack", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<style>@font-face{font-family:Broken;src:url(data:font/woff2;base64,AAAA)}</style>
+      <p data-cdf="Body" style="font-family:Broken, Georgia, serif;margin:0">Hello</p>`);
+    await page.evaluate(() => document.fonts.ready);
+    const family = find(root, (x) => x.name === "Body")!.text!.fontFamily;
+    const georgia = await page.evaluate(() => {
+      const ctx = document.createElement("canvas").getContext("2d")!;
+      ctx.font = '72px "Georgia", monospace';
+      const a = ctx.measureText("mmmlliWW").width;
+      ctx.font = "72px monospace";
+      return a !== ctx.measureText("mmmlliWW").width;
+    });
+    expect(family).toBe(georgia ? "Georgia" : "Broken");
+  });
+});
+
+describe("links and limits", () => {
+  it("a link's text keeps where it goes; a part linking elsewhere in a paragraph is a run; relative links are left out", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(`<a data-cdf="Docs" href="https://example.com/docs">Read the docs</a>
+      <p data-cdf="Terms" style="margin:0">See our <a href="https://example.com/terms">terms</a> or <a href="/help">help</a>.</p>`);
+    expect(find(root, (x) => x.name === "Docs")!.text?.link).toBe("https://example.com/docs");
+    const terms = find(root, (x) => x.name === "Terms")!.text!;
+    expect(terms.link).toBeUndefined();
+    const run = terms.runs?.find((r) => r.link);
+    expect(terms.characters.slice(run!.start, run!.end)).toBe("terms");
+    expect(terms.runs?.some((r) => r.link?.includes("/help"))).toBe(false);
+  });
+  it("min and max widths in pixels are kept", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(
+      `<div style="display:flex"><div data-cdf="Card" style="flex:1;max-width:300px;min-width:120px;min-height:40px;background:#eee"></div></div>`,
+    );
+    expect(find(root, (x) => x.name === "Card")!.limits).toEqual({ minW: 120, maxW: 300, minH: 40 });
+  });
+});
+
+describe("align-self wrappers in rows that wrap", () => {
+  it("cards on a second line of a wrapping row aren't taken for children placed at the end", async (t) => {
+    if (!browser) return t.skip();
+    const card = (i: number) => `<div data-cdf="Card-${i}" style="width:180px;height:100px;background:#eee"></div>`;
+    const root = await extract(
+      `<div data-cdf="Grid" style="display:flex;flex-wrap:wrap;gap:8px;width:400px">${[0, 1, 2, 3].map(card).join("")}</div>`,
+    );
+    const grid = find(root, (x) => x.name === "Grid")!;
+    expect(grid.children?.map((c) => c.name)).toEqual(["Card-0", "Card-1", "Card-2", "Card-3"]);
+  });
+});
+
+describe("a text in a box drawn only by a gradient or a shadow", () => {
+  it("an avatar's gradient circle with its initials keeps the circle", async (t) => {
+    if (!browser) return t.skip();
+    const root = await extract(
+      `<div data-cdf="Avatar" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9999px;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;box-shadow:0 1px 2px #0004">SJ</div>`,
+    );
+    const avatar = find(root, (x) => x.name === "Avatar")!;
+    expect(avatar.type).toBe("FRAME");
+    expect(avatar.gradient).toBeTruthy();
+    expect(avatar.radius?.value).toBeGreaterThan(17);
+    expect(avatar.children?.[0]?.text?.characters).toBe("SJ");
+  });
+});

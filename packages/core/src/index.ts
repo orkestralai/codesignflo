@@ -16,6 +16,22 @@ export {
   type UpdateResult,
 } from "./apply/apply.js";
 export { type Bundle, unpackBundle } from "./apply/bundle.js";
+export {
+  alikeNote,
+  colourSeverity,
+  countLook,
+  deltaE,
+  hexToRgba,
+  noSignals,
+  offBy,
+  type PropCheck,
+  type PropDifference,
+  propDifferenceLine,
+  SAME_COLOUR,
+  type StyleSignals,
+  signalDifferences,
+  worstFirst,
+} from "./apply/check.js";
 export { deltaFor, withDataTags } from "./apply/delta.js";
 export {
   type AppFacts,
@@ -53,10 +69,13 @@ export {
   compileScreens,
   type InstanceOverride,
   inlineInstances,
+  lookSignature,
   type Registry,
   type Screen,
   type SpecNode,
   type SpecRun,
+  splitExamples,
+  tokenColours,
   tokenNames,
   variantName,
 } from "./compile/compile.js";
@@ -99,6 +118,7 @@ export {
   compareComponents,
   type DesignerVariable,
   type LibraryComponent,
+  lintLink,
   mapProps,
   mapVariant,
   normName,

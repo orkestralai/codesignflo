@@ -42,6 +42,15 @@ run("hosted MCP: sign-in and tools", { timeout: 30_000 }, () => {
   });
   afterAll(() => srv?.close());
 
+  it("tells an open plugin the newest plugin version and where to download it (readable from Figma's null origin)", async () => {
+    const r = await fetch(`${BASE}/api/plugin`, { headers: { origin: "null" } });
+    expect(r.status).toBe(200);
+    expect(r.headers.get("access-control-allow-origin")).toBe("*");
+    const body = (await r.json()) as { version: string; download: string };
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+/);
+    expect(body.download).toMatch(/\/plugin\.zip$/);
+  });
+
   it("an agent signs in: 401 → discovery → registration → approval → PKCE code → tokens (once)", async () => {
     const r401 = await fetch(`${BASE}/mcp`, { method: "POST", body: "{}" });
     expect(r401.status).toBe(401);

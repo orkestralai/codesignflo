@@ -54,6 +54,21 @@ function collect(root: IRNode, owner: string, files: string[]): Unnamed[] {
 
 async function find(sbOut: string): Promise<Unnamed[]> {
   const { registry, irs } = await renderStorybook(sbOut, process.cwd());
+  return unnamedIn(registry, irs);
+}
+
+/**
+ * The unnamed elements of the registered components and pages, once each (sync's count uses this too: it
+ * counted every story's whole tree, nested components included, and said "2 without a name" where
+ * `name --check` found none).
+ */
+export function unnamedIn(
+  registry: {
+    components: Record<string, { stories: Record<string, unknown>; files: string[] }>;
+    screens: Record<string, { story: string; files: string[] }>;
+  },
+  irs: Map<string, { root: IRNode }>,
+): Unnamed[] {
   const found: Unnamed[] = [];
   for (const [key, c] of Object.entries(registry.components))
     for (const story of Object.keys(c.stories)) {

@@ -3,7 +3,7 @@ import type { PropMap } from "@codesignflo/core";
 import type * as protocol from "@codesignflo/core/protocol";
 import * as ds from "./designsystem.js";
 import { demoShotsFromLive, onProgress } from "./executor.js";
-import { forgetProject, init, meta, migrateLegacy, resetDemoFile } from "./facts.js";
+import { clearFile, fileContents, forgetProject, init, meta, migrateLegacy, resetDemoFile } from "./facts.js";
 import { handlers } from "./handlers.js";
 import type { GuidePrefs, MainToUi, UiToMain } from "./messages.js";
 import * as panel from "./panel.js";
@@ -97,6 +97,8 @@ const actions: Record<string, (p: never) => Promise<unknown>> = {
   setUpFile: (p: { projectId: string }) => init(p),
   forgetProject: async () => forgetProject(),
   resetDemoFile: () => resetDemoFile(),
+  clearFile: () => clearFile(),
+  fileContents: () => fileContents(),
   // The demo walkthrough: outlining the layer a step is about.
   tourMark: (p: Parameters<typeof tourMark>[0]) => tourMark(p),
   tourClear: () => tourClear(),

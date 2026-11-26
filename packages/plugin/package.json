@@ -16,5 +16,5 @@
     "@figma/plugin-typings": "^1.140.0",
     "esbuild": "^0.25.0"
   },
-  "version": "0.5.0"
+  "version": "0.5.1"
 }

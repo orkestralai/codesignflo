@@ -1,8 +1,10 @@
 // Compiler: IR (per story) + registry → declarative spec of one Figma component set per component.
 // Deterministic: same IR in, byte-identical spec out. The plugin executor reconciles Figma to it.
 
+import { deltaE, hexToRgba, SAME_COLOUR } from "../apply/check.js";
+import { parseTokenColor, type TokenRGBA } from "./color.js";
 import type { IRNode, IRStory, Tokened } from "./ir.js";
-import { parseBoxShadow } from "./shadow.js";
+import { blendModeOf, parseBoxShadow, parseFilters } from "./shadow.js";
 
 export type Registry = {
   components: Record<
@@ -50,6 +52,15 @@ export const lookSignature = (root: IRNode): string[] => {
         m.shadow ?? "",
         m.svg ?? "",
         m.image?.ref ?? "",
+        m.background?.ref ?? "",
+        [
+          m.radii ?? "",
+          m.filter ?? "",
+          m.backdrop ?? "",
+          m.blend ?? "",
+          m.outline ? `${m.outline.color}/${m.outline.width}` : "",
+          t?.decoration ?? "",
+        ].join("|"),
         t ? `${t.fontFamily}/${t.fontWeight.value}/${t.fontSize.value}/${t.italic ?? ""}/${t.case ?? ""}` : "",
       ].join("|"),
     );
@@ -58,6 +69,36 @@ export const lookSignature = (root: IRNode): string[] => {
   walk(root, "", true);
   return out;
 };
+/**
+ * Examples that are really versions of their own: a story registered as an example of a variant (same props,
+ * other data) that renders differently (a pricing card that isn't the highlighted one, a list with other rows)
+ * becomes a variant. Its component's variants are then told apart by story (story=free, story=business), so
+ * every variant name is unique: the plan cards were all "billing=monthly", Free and Business only examples of
+ * Team, and a page's Free card could never be placed as a component.
+ */
+export function splitExamples<R extends Registry>(registry: R, irs: Map<string, IRStory>): R {
+  const components = Object.fromEntries(
+    Object.entries(registry.components).map(([key, c]) => {
+      const distinct = Object.entries(c.examples ?? {}).filter(([example, variant]) => {
+        const [a, b] = [irs.get(example), irs.get(variant)];
+        return !!a && !!b && lookDistance(lookSignature(a.root), lookSignature(b.root)) > 0;
+      });
+      if (!distinct.length) return [key, c];
+      const name = (story: string) => story.split("--")[1] ?? story;
+      const promoted = new Set(distinct.map(([e]) => e));
+      const stories = Object.fromEntries(
+        [...Object.entries(c.stories), ...distinct.map(([e, v]) => [e, c.stories[v] ?? {}] as const)].map(([story, props]) => [
+          story,
+          { ...props, story: name(story) },
+        ]),
+      );
+      const examples = Object.fromEntries(Object.entries(c.examples ?? {}).filter(([e]) => !promoted.has(e)));
+      return [key, { ...c, stories, ...(Object.keys(examples).length ? { examples } : { examples: undefined }) }];
+    }),
+  );
+  return { ...registry, components };
+}
+
 /** How many layers differ between two signatures (in either). */
 const lookDistance = (a: string[], b: string[]) => {
   const left = new Map<string, number>();
@@ -79,6 +120,9 @@ export type SpecRun = {
   fontSize?: number;
   fill?: string;
   underline?: boolean;
+  strikethrough?: boolean;
+  /** A link on this part ("" takes the text's link off it). */
+  link?: string;
 };
 
 /** Desired Figma node. `k` is the sync key; the executor matches existing nodes by it. */
@@ -151,6 +195,29 @@ export function tokenNames(dtcg: Record<string, unknown>): Map<string, string> {
   return out;
 }
 
+/**
+ * "color-status-success-border" (CSS custom property) → the colour the Figma variable will hold (its DTCG value,
+ * aliases followed). Colours only; values that aren't one are left out.
+ */
+export function tokenColours(dtcg: Record<string, unknown>): Map<string, TokenRGBA> {
+  const raw = new Map<string, unknown>();
+  const walk = (node: Record<string, unknown>, path: string[]) => {
+    if ("$value" in node) return void raw.set(path.join("."), node.$value);
+    for (const k of Object.keys(node).filter((x) => !x.startsWith("$"))) walk(node[k] as Record<string, unknown>, [...path, k]);
+  };
+  walk(dtcg, []);
+  const resolve = (v: unknown, depth = 0): unknown => {
+    const alias = typeof v === "string" ? /^\{([^}]+)\}$/.exec(v.trim())?.[1] : undefined;
+    return alias && depth < 8 ? resolve(raw.get(alias), depth + 1) : v;
+  };
+  const out = new Map<string, TokenRGBA>();
+  for (const [dotted, v] of raw) {
+    const c = parseTokenColor(resolve(v));
+    if (c) out.set(dotted.split(".").join("-"), c);
+  }
+  return out;
+}
+
 export type Screen = {
   spec: SpecNode;
   coverage: { nodes: number; inInstances: number; instances: Record<string, number>; unmapped: string[] };
@@ -184,8 +251,14 @@ function markDataText(variants: SpecNode[], examples: SpecNode[] = []) {
     });
 }
 
-export function compile(registry: Registry, irs: Map<string, IRStory>, tokens: Map<string, string>): SpecNode[] {
-  return dependencyOrder(compiler(registry, irs, tokens).sets());
+export function compile(
+  registry: Registry,
+  irs: Map<string, IRStory>,
+  tokens: Map<string, string>,
+  /** The tokens' colours (tokenColours): a colour binds to its token only when the browser drew that colour. */
+  colours?: Map<string, TokenRGBA>,
+): SpecNode[] {
+  return dependencyOrder(compiler(registry, irs, tokens, colours).sets());
 }
 
 /**
@@ -229,8 +302,9 @@ export function compileScreens(
   registry: Registry & { screens?: Record<string, string | { story: string }> },
   irs: Map<string, IRStory>,
   tokens: Map<string, string>,
+  colours?: Map<string, TokenRGBA>,
 ): Screen[] {
-  const c = compiler(registry, irs, tokens);
+  const c = compiler(registry, irs, tokens, colours);
   return Object.entries(registry.screens ?? {}).map(([key, entry]) => {
     const story = typeof entry === "string" ? entry : entry.story;
     const ir = irs.get(story);
@@ -369,6 +443,7 @@ export function unwrap(root: IRNode): IRNode {
     !n.shadow &&
     !n.radius?.value &&
     !n.image &&
+    !n.background &&
     !n.component &&
     !n.module
   )
@@ -380,8 +455,30 @@ export function unwrap(root: IRNode): IRNode {
 const MIN_CLASSES = 4;
 const classSet = (n: IRNode) => new Set((n.cls ?? "").split(" ").filter(Boolean));
 
-function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<string, string>) {
-  const v = (t?: Tokened<unknown>) => (t?.token ? tokens.get(t.token) : undefined);
+function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<string, string>, colours?: Map<string, TokenRGBA>) {
+  /**
+   * The Figma variable for a value the CSS took from a token. A colour binds only when the token's colour is the
+   * one the browser drew: a token the page doesn't define (the browser fell back to transparent) or defines
+   * differently would otherwise draw its own colour in Live (a mint border the app doesn't have).
+   */
+  // Colours by value, for colours the CSS set without var() (Tailwind v3's theme(), CSS-in-JS, color-mix): bound to
+  // a token only when exactly one token has that value (two would be a guess between meanings).
+  const channels = (c: { r: number; g: number; b: number; a?: number }) =>
+    [c.r, c.g, c.b, c.a ?? 1].map((x) => Math.round(x * 255)).join(",");
+  const byValue = new Map<string, string[]>();
+  for (const [name, c] of colours ?? []) if (tokens.has(name)) byValue.set(channels(c), [...(byValue.get(channels(c)) ?? []), name]);
+  const v = (t?: Tokened<unknown>) => {
+    if (t && !t.token && typeof t.value === "string") {
+      const drawn = hexToRgba(t.value);
+      const only = drawn ? byValue.get(channels(drawn)) : undefined;
+      return only?.length === 1 ? tokens.get(only[0]!) : undefined;
+    }
+    const name = t?.token ? tokens.get(t.token) : undefined;
+    if (!name || typeof t!.value !== "string") return name;
+    const drawn = hexToRgba(t!.value);
+    const token = colours?.get(t!.token!);
+    return drawn && token && deltaE(drawn, token) >= SAME_COLOUR ? undefined : name;
+  };
   const byModule = new Map(Object.entries(registry.components).map(([key, c]) => [c.module, { key, ...c }]));
   const byKey = new Map(Object.entries(registry.components).map(([key, c]) => [key, { key, ...c }]));
   // Components' stories start at the component itself (see unwrap); pages keep their whole tree.
@@ -578,6 +675,21 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
             : {}),
         };
 
+  /**
+   * What any layer draws on top of its own content, frames, pictures, SVGs and texts alike: corners (each corner
+   * when they differ), opacity, effects (box- or text-shadow, a filter's blur and drop-shadow, a backdrop blur)
+   * and blend mode. Always written for frames and pictures, so what's gone from the code goes from Live.
+   */
+  const look = (n: IRNode, corners: boolean): Record<string, unknown> => ({
+    ...(corners
+      ? n.radii
+        ? { topLeftRadius: n.radii[0], topRightRadius: n.radii[1], bottomRightRadius: n.radii[2], bottomLeftRadius: n.radii[3] }
+        : { cornerRadius: n.radius?.value ?? 0 }
+      : {}),
+    opacity: n.opacity ?? 1,
+    effects: [...parseBoxShadow(n.shadow), ...parseFilters(n.filter, n.backdrop)],
+    blendMode: blendModeOf(n.blend) ?? "PASS_THROUGH",
+  });
   const build = (
     n: IRNode,
     k: string,
@@ -608,6 +720,14 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
     const fixedH = n.sizing.h === "fixed" || (isVariantRoot && n.sizing.h === "fill");
     if (fixedW) props.width = n.width;
     if (fixedH) props.height = n.height;
+    // The code's limits on a layer that fills or hugs (Figma takes them in auto layout only: its own or its parent's).
+    if (n.limits && !n.absolute && (parentLayout || n.layout) && (n.type === "FRAME" || n.type === "TEXT")) {
+      const l = n.limits;
+      if (!fixedW && l.minW !== undefined) props.minWidth = l.minW;
+      if (!fixedW && l.maxW !== undefined) props.maxWidth = l.maxW;
+      if (!fixedH && l.minH !== undefined) props.minHeight = l.minH;
+      if (!fixedH && l.maxH !== undefined) props.maxHeight = l.maxH;
+    }
     // A margin spacer's size comes from its token (e.g. margin-bottom: var(--space-2)).
     if (n.spaceToken && tokens.get(n.spaceToken)) bind[fixedH ? "height" : "width"] = tokens.get(n.spaceToken)!;
 
@@ -628,6 +748,10 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
       props.textAutoResize = n.sizing.w === "hug" ? "WIDTH_AND_HEIGHT" : "HEIGHT";
       if (t.align) props.textAlignHorizontal = t.align;
       if (t.case) props.textCase = t.case;
+      props.textDecoration = t.decoration ?? "NONE";
+      // A link (Dev Mode and prototypes open it); none when the code's text isn't one.
+      props.hyperlink = t.link ? { type: "URL", value: t.link } : null;
+      Object.assign(props, look(n, false));
       if (t.maxLines) {
         props.textTruncation = "ENDING";
         props.maxLines = t.maxLines;
@@ -650,6 +774,8 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
         ...(r.fontSize !== undefined ? { fontSize: r.fontSize } : {}),
         ...(r.color ? { fill: r.color } : {}),
         ...(r.underline !== undefined ? { underline: r.underline } : {}),
+        ...(r.strikethrough !== undefined ? { strikethrough: r.strikethrough } : {}),
+        ...(r.link !== undefined ? { link: r.link } : {}),
       }));
       return {
         k,
@@ -666,7 +792,18 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
       props.fills = [n.image?.ref ? `image:${n.image.ref}` : (n.fill?.value ?? "#e0e7ff")];
       if (!parentLayout || n.sizing.w === "fixed") props.width = n.width;
       if (!parentLayout || n.sizing.h === "fixed") props.height = n.height;
-      return { k, type: "RECTANGLE", name: n.name, props };
+      // Rounded, bordered, shadowed or faded like any box (round avatars, rounded thumbnails).
+      Object.assign(props, look(n, true));
+      if (n.stroke) {
+        props.strokes = [n.stroke.color.value];
+        props.strokeWeight = n.stroke.width;
+        props.strokeAlign = "INSIDE";
+      } else props.strokes = [];
+      const r = n.radii ? undefined : v(n.radius);
+      const corners = r
+        ? Object.fromEntries(["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"].map((f) => [f, r]))
+        : null;
+      return { k, type: "RECTANGLE", name: n.name, props, ...(corners ? { bind: corners } : {}) };
     }
     if (n.type === "SVG") {
       return {
@@ -682,6 +819,8 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
           ...Object.fromEntries(
             ["rotation", "layoutPositioning", "x", "y"].filter((f) => props[f] !== undefined).map((f) => [f, props[f]]),
           ),
+          // Faded, shadowed (drop-shadow on icons) or blended as the browser draws it: Figma's SVG import drops it.
+          ...look(n, false),
         },
         svg: n.svg,
       };
@@ -761,6 +900,8 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
       ...(n.gradient
         ? [`gradient:${JSON.stringify({ angle: n.gradient.angle, stops: n.gradient.stops.map((x) => [x.color.value, x.position]) })}`]
         : []),
+      // Background pictures (a hero's cover photo, an avatar drawn as a background, a gradient over a picture).
+      ...(n.background?.ref ? [`image:${n.background.ref}`] : []),
     ];
     if (n.stroke) {
       props.strokes = [n.stroke.color.value];
@@ -769,14 +910,31 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
       else props.strokeWeight = n.stroke.width;
       props.strokeAlign = "INSIDE";
       if (n.stroke.dash) props.dashPattern = n.stroke.dash;
+    } else if (n.outline) {
+      // An outline without a border (a focus ring): a stroke outside the box, taking no layout space.
+      props.strokes = [n.outline.color];
+      props.strokeWeight = n.outline.width;
+      props.strokeAlign = "OUTSIDE";
     } else props.strokes = [];
     // CSS borders are part of the box (border-box); Figma strokes only take layout space with this flag.
     props.strokesIncludedInLayout = !!n.stroke;
-    props.cornerRadius = n.radius?.value ?? 0;
-    props.opacity = n.opacity ?? 1;
     props.clipsContent = !!n.clip;
-    // Shadows → effects (always written, so a shadow removed in code is removed in Live).
-    props.effects = parseBoxShadow(n.shadow);
+    // Corners, opacity, shadows and filters → Figma (always written, so a shadow removed in code is removed in Live).
+    Object.assign(props, look(n, true));
+    // An outline around a border: a ring outside it (a spread shadow), the border staying inside.
+    if (n.outline && n.stroke)
+      (props.effects as unknown[]).push({
+        type: "DROP_SHADOW",
+        color: (() => {
+          const c = hexToRgba(n.outline.color) ?? { r: 0, g: 0, b: 0, a: 1 };
+          return { r: c.r, g: c.g, b: c.b, a: c.a };
+        })(),
+        offset: { x: 0, y: 0 },
+        radius: 0,
+        spread: n.outline.width,
+        visible: true,
+        blendMode: "NORMAL",
+      });
     // Figma draws a shadow's spread (a ring: 0 0 0 3px) only on a frame that clips its content; nothing
     // sticks out of a laid-out frame without absolute children, so clipping changes nothing else.
     if ((props.effects as { spread: number }[]).some((e) => e.spread > 0) && !(n.children ?? []).some((c) => c.absolute))
@@ -787,7 +945,8 @@ function compiler(registry: Registry, irs0: Map<string, IRStory>, tokens: Map<st
       const t = v(l.padding[i]);
       if (t) bind[f] = t;
     });
-    const r = v(n.radius);
+    // The radius token binds the four corners when they're equal (corners that differ keep their own values).
+    const r = n.radii ? undefined : v(n.radius);
     if (r) for (const f of ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]) bind[f] = r;
     const fill = v(n.fill);
     if (fill) paintBind.fills = fill;

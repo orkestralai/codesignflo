@@ -9,6 +9,7 @@ import { VERSION } from "../version.js";
 import { extractInPage } from "./extract-in-page.js";
 import { DEFAULT_DATE, type RawStoryOptions, renderOptions, type StoryRenderOptions } from "./options.js";
 import { type AutoRegistry, register } from "./register.js";
+import { droppedTexts, pageTextsInPage } from "./text-inventory.js";
 
 const TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -210,19 +211,71 @@ async function settle(page: Page | Frame) {
       }),
   );
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
-  // Pictures too (they are rasterised into the IR).
-  await page.evaluate(() =>
-    Promise.all(
-      Array.from(document.images).map((i) =>
+  // Pictures too (they are rasterised into the IR), the lazy ones included: loaded now, each given a few seconds
+  // so one that never arrives can't hold up the story.
+  await page.evaluate(picturesLoadedInPage);
+}
+
+/**
+ * Runs in the page: lazy pictures load now (loading="lazy" made eager, a data-src the page would set on scroll put
+ * in place, the page scrolled through once so observers fire), then every picture, CSS background picture and
+ * video frame is waited for, at most 3 s each, and pictures decoded so they can be drawn.
+ */
+export async function picturesLoadedInPage(): Promise<void> {
+  const within = (p: Promise<unknown>, ms = 3000) => Promise.race([p.catch(() => undefined), new Promise((r) => setTimeout(r, ms))]);
+  for (const i of Array.from(document.images)) {
+    if (i.loading === "lazy") i.loading = "eager";
+    const lazySrc = i.dataset.src ?? i.dataset.lazySrc;
+    if (lazySrc && (!i.getAttribute("src") || i.getAttribute("src")?.startsWith("data:"))) i.src = lazySrc;
+    if (i.dataset.srcset && !i.srcset) i.srcset = i.dataset.srcset;
+  }
+  const height = document.documentElement.scrollHeight;
+  if (height > innerHeight) {
+    for (let y = 0; y < height; y += innerHeight) {
+      scrollTo(0, y);
+      await new Promise((r) => requestAnimationFrame(() => r(undefined)));
+    }
+    scrollTo(0, 0);
+  }
+  // Background pictures, kept where the extractor finds them (`__cdfPictures`, by address) to draw them.
+  const backgrounds = new Set<string>();
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *"))) {
+    const bg = getComputedStyle(el).backgroundImage;
+    if (!bg.includes("url(")) continue;
+    for (const m of bg.matchAll(/url\(["']?([^"')]+)["']?\)/g)) backgrounds.add(new URL(m[1]!, location.href).href);
+  }
+  const w = window as unknown as { __cdfPictures?: Record<string, HTMLImageElement> };
+  w.__cdfPictures ??= {};
+  const kept = w.__cdfPictures;
+  await Promise.all([
+    ...Array.from(document.images).map((i) =>
+      within(
         i.complete
-          ? null
+          ? i.decode()
           : new Promise((r) => {
-              i.addEventListener("load", r);
-              i.addEventListener("error", r);
-            }),
+              i.addEventListener("load", r, { once: true });
+              i.addEventListener("error", r, { once: true });
+            }).then(() => i.decode()),
       ),
     ),
-  );
+    ...[...backgrounds].map((src) => {
+      const i = new Image();
+      i.src = src;
+      return within(i.decode().then(() => (kept[src] ??= i)));
+    }),
+    // Posters, kept like background pictures (drawn when the video shows no frame).
+    ...Array.from(document.querySelectorAll("video")).flatMap((v) => {
+      if (!v.poster) return [];
+      const i = new Image();
+      i.src = v.poster;
+      return [within(i.decode().then(() => (kept[new URL(v.poster, location.href).href] ??= i)))];
+    }),
+    ...Array.from(document.querySelectorAll("video")).map((v) => {
+      if (v.readyState >= 2 || (!v.currentSrc && !v.querySelector("source") && !v.src)) return null;
+      v.preload = "auto";
+      return within(new Promise((r) => v.addEventListener("loadeddata", r, { once: true })));
+    }),
+  ]);
 }
 
 /**
@@ -293,6 +346,10 @@ export async function renderStorybook(
   failed: Map<string, string>;
   /** Page story → the browser's screenshot of it (a ref into `images`, its size), shown beside the Live page. */
   shots: Map<string, { ref: string; w: number; h: number }>;
+  /** Story → text it shows that the extractor didn't read (Live won't have it). */
+  dropped: Map<string, string[]>;
+  /** Web fonts (@font-face) the stories' texts use: Figma needs each installed to draw Live as the app. */
+  webFonts: string[];
 }> {
   return withStorybook(staticDir, async (page, load) => {
     const index = JSON.parse(readFileSync(join(staticDir, "index.json"), "utf8")) as { entries: Record<string, { type: string }> };
@@ -315,9 +372,22 @@ export async function renderStorybook(
         images.set(ref, n.image.png);
         n.image = { ref };
       }
+      if (n.background?.png) {
+        const ref = hash(n.background.png);
+        images.set(ref, n.background.png);
+        n.background = { ref };
+      }
       for (const c of n.children ?? []) refs(c);
     };
     const shots = new Map<string, { ref: string; w: number; h: number }>();
+    /** Text each story shows that the extractor didn't read (Live won't have it): CoDesignFlo gaps. */
+    const dropped = new Map<string, string[]>();
+    const webFonts = new Set<string>();
+    const familiesOf = (n: IRNode, out: Set<string>) => {
+      if (n.text?.fontFamily) out.add(n.text.fontFamily);
+      for (const c of n.children ?? []) familiesOf(c, out);
+      return out;
+    };
     const pages = new Set(Object.values(registry.screens).map((s) => s.story));
     const sizeOf = new Map(Object.entries(registry.screens).flatMap(([key, s]) => (sizes[key] ? [[s.story, sizes[key]!] as const] : [])));
     for (const id of [...new Set(ids)].sort()) {
@@ -343,6 +413,15 @@ export async function renderStorybook(
       }
       refs(root);
       irs.set(id, { story: id, root });
+      const shown = await page.evaluate(pageTextsInPage).catch(() => [] as string[]);
+      const missing = droppedTexts(shown, root);
+      if (missing.length) dropped.set(id, missing);
+      const loaded = await page
+        .evaluate(() =>
+          Array.from(document.fonts ?? []).flatMap((f) => (f.status === "loaded" ? [f.family.replace(/["']/g, "").trim()] : [])),
+        )
+        .catch(() => [] as string[]);
+      for (const f of familiesOf(root, new Set())) if (loaded.some((l) => l.toLowerCase() === f.toLowerCase())) webFonts.add(f);
     }
     // What's left of the registry without them: a component without any readable story isn't one this time.
     for (const [key, c] of Object.entries(registry.components)) {
@@ -351,7 +430,7 @@ export async function renderStorybook(
       if (!Object.keys(c.stories).length) delete registry.components[key];
     }
     for (const [key, sc] of Object.entries(registry.screens)) if (!irs.has(sc.story)) delete registry.screens[key];
-    return { registry, irs, images, failed, shots };
+    return { registry, irs, images, failed, shots, dropped, webFonts: [...webFonts].sort() };
   });
 }
 
@@ -363,6 +442,7 @@ export const UNREADABLE = "couldn't be read: ";
  * read the same way and placed in its iframe's layer. A frame that can't be read (another site's) stays empty.
  */
 export async function extractPage(page: Page): Promise<IRNode> {
+  await foreignPictures(page);
   const root = await page.evaluate(extractInPage);
   const holders: IRNode[] = [];
   const find = (n: IRNode) => {
@@ -375,6 +455,7 @@ export async function extractPage(page: Page): Promise<IRNode> {
   for (const holder of holders) {
     const frame = await iframes[holder.iframe!]?.contentFrame();
     if (!frame) continue;
+    await foreignPictures(frame).catch(() => undefined);
     const inner = await frame.evaluate(extractInPage).catch(() => null);
     if (!inner) continue;
     // Placed from the iframe's top-left (the frame's own page starts there), filling it.
@@ -392,11 +473,74 @@ export async function extractPage(page: Page): Promise<IRNode> {
   return root;
 }
 
+/**
+ * Pictures from other sites (a CDN, avatars, stock photos): the page can't read their pixels (a canvas drawing them
+ * is "tainted"), so Live showed a placeholder. Fetched here instead, as the browser would, and handed to the page
+ * as data URLs it can draw (`__cdfPictures`, by address), so they're rasterised like the page's own.
+ */
+export async function foreignPictures(page: Page | Frame): Promise<number> {
+  const urls = await page.evaluate(() => {
+    const out = new Set<string>();
+    const foreign = (u: string) => {
+      try {
+        const x = new URL(u, location.href);
+        return (x.protocol === "http:" || x.protocol === "https:") && x.origin !== location.origin;
+      } catch {
+        return false;
+      }
+    };
+    for (const i of Array.from(document.images))
+      if (i.currentSrc && foreign(i.currentSrc)) out.add(new URL(i.currentSrc, location.href).href);
+    for (const v of Array.from(document.querySelectorAll("video")))
+      if (v.poster && foreign(v.poster)) out.add(new URL(v.poster, location.href).href);
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *")))
+      for (const m of getComputedStyle(el).backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g))
+        if (foreign(m[1]!)) out.add(new URL(m[1]!, location.href).href);
+    return [...out].slice(0, 100);
+  });
+  if (!urls.length) return 0;
+  const request = "request" in page ? page.request : page.page().request;
+  const got: [string, string][] = [];
+  await Promise.all(
+    urls.map(async (u) => {
+      try {
+        const r = await request.get(u, { timeout: 10_000 });
+        const type = (r.headers()["content-type"] ?? "").split(";")[0]!.trim();
+        if (!r.ok() || !type.startsWith("image/")) return;
+        const body = await r.body();
+        if (body.length <= 15_000_000) got.push([u, `data:${type};base64,${body.toString("base64")}`]);
+      } catch {
+        // unreachable from here too: the placeholder stays
+      }
+    }),
+  );
+  return page.evaluate(async (pairs) => {
+    const w = window as unknown as { __cdfPictures?: Record<string, HTMLImageElement> };
+    w.__cdfPictures ??= {};
+    const into = w.__cdfPictures;
+    await Promise.all(
+      pairs.map(async ([u, data]) => {
+        const i = new Image();
+        i.src = data;
+        try {
+          await i.decode();
+          into[u] = i;
+        } catch {
+          // a format the browser can't decode from bytes alone
+        }
+      }),
+    );
+    return Object.keys(into).length;
+  }, got);
+}
+
 /** The story's root element as the browser draws it (what Live builds its page from), JPEG base64. */
 export async function screenshot(page: Page): Promise<{ jpeg: string; w: number; h: number } | null> {
   const el = (
     await page.evaluateHandle(() => {
-      const c = document.querySelector("[data-cdf-container], [data-cdl-container]") ?? document.querySelector("#storybook-root");
+      let c = document.querySelector("[data-cdf-container], [data-cdl-container]") ?? document.querySelector("#storybook-root");
+      // The innermost of nested wrappers (as extractInPage reads it).
+      while (c?.firstElementChild?.matches("[data-cdf-container], [data-cdl-container]")) c = c.firstElementChild;
       return c?.firstElementChild ?? null;
     })
   ).asElement();

@@ -35,10 +35,11 @@
           "fills": ["#f4f4f5"],
           "strokes": [],
           "strokesIncludedInLayout": false,
+          "clipsContent": false,
           "cornerRadius": 9999,
           "opacity": 1,
-          "clipsContent": false,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "paddingRight": "space/2",
@@ -74,7 +75,12 @@
                 "value": 0
               },
               "fills": ["#52525b"],
-              "textAutoResize": "WIDTH_AND_HEIGHT"
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textDecoration": "NONE",
+              "hyperlink": null,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "fontSize": "font/size/sm"
@@ -108,10 +114,11 @@
           "fills": ["#fee2e2"],
           "strokes": [],
           "strokesIncludedInLayout": false,
+          "clipsContent": false,
           "cornerRadius": 9999,
           "opacity": 1,
-          "clipsContent": false,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "paddingRight": "space/2",
@@ -147,7 +154,12 @@
                 "value": 0
               },
               "fills": ["#dc2626"],
-              "textAutoResize": "WIDTH_AND_HEIGHT"
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textDecoration": "NONE",
+              "hyperlink": null,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "fontSize": "font/size/sm"
@@ -203,10 +215,11 @@
           "strokeWeight": 1,
           "strokeAlign": "INSIDE",
           "strokesIncludedInLayout": true,
+          "clipsContent": false,
           "cornerRadius": 8,
           "opacity": 1,
-          "clipsContent": false,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "itemSpacing": "space/2",
@@ -244,7 +257,12 @@
                 "value": 0
               },
               "fills": ["#ffffff"],
-              "textAutoResize": "WIDTH_AND_HEIGHT"
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textDecoration": "NONE",
+              "hyperlink": null,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "fontSize": "font/size/md"
@@ -283,10 +301,11 @@
           "strokeWeight": 1,
           "strokeAlign": "INSIDE",
           "strokesIncludedInLayout": true,
+          "clipsContent": false,
           "cornerRadius": 8,
           "opacity": 1,
-          "clipsContent": false,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "itemSpacing": "space/2",
@@ -325,7 +344,12 @@
                 "value": 0
               },
               "fills": ["#18181b"],
-              "textAutoResize": "WIDTH_AND_HEIGHT"
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textDecoration": "NONE",
+              "hyperlink": null,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "fontSize": "font/size/md"
@@ -364,10 +388,11 @@
           "strokeWeight": 1,
           "strokeAlign": "INSIDE",
           "strokesIncludedInLayout": true,
+          "clipsContent": false,
           "cornerRadius": 8,
           "opacity": 0.5,
-          "clipsContent": false,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "itemSpacing": "space/2",
@@ -405,7 +430,12 @@
                 "value": 0
               },
               "fills": ["#ffffff"],
-              "textAutoResize": "WIDTH_AND_HEIGHT"
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textDecoration": "NONE",
+              "hyperlink": null,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "fontSize": "font/size/md"
@@ -444,10 +474,11 @@
           "strokeWeight": 1,
           "strokeAlign": "INSIDE",
           "strokesIncludedInLayout": true,
+          "clipsContent": false,
           "cornerRadius": 8,
           "opacity": 1,
-          "clipsContent": false,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "itemSpacing": "space/2",
@@ -485,7 +516,12 @@
                 "value": 0
               },
               "fills": ["#ffffff"],
-              "textAutoResize": "WIDTH_AND_HEIGHT"
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textDecoration": "NONE",
+              "hyperlink": null,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "fontSize": "font/size/sm"
@@ -524,10 +560,11 @@
           "strokeWeight": 1,
           "strokeAlign": "INSIDE",
           "strokesIncludedInLayout": true,
+          "clipsContent": false,
           "cornerRadius": 8,
           "opacity": 1,
-          "clipsContent": false,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "itemSpacing": "space/2",
@@ -566,10 +603,11 @@
               "fills": [],
               "strokes": [],
               "strokesIncludedInLayout": false,
+              "clipsContent": false,
               "cornerRadius": 0,
               "opacity": 1,
-              "clipsContent": false,
-              "effects": []
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "children": [
               {
@@ -580,7 +618,10 @@
                   "width": 16,
                   "height": 16,
                   "layoutSizingHorizontal": "FIXED",
-                  "layoutSizingVertical": "FIXED"
+                  "layoutSizingVertical": "FIXED",
+                  "opacity": 1,
+                  "effects": [],
+                  "blendMode": "PASS_THROUGH"
                 },
                 "svg": "<svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"#ffffff\"><path d=\"M7 3h2v4h4v2H9v4H7V9H3V7h4z\"></path></svg>",
                 "measured": {
@@ -615,7 +656,12 @@
                 "value": 0
               },
               "fills": ["#ffffff"],
-              "textAutoResize": "WIDTH_AND_HEIGHT"
+              "textAutoResize": "WIDTH_AND_HEIGHT",
+              "textDecoration": "NONE",
+              "hyperlink": null,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "fontSize": "font/size/md"
@@ -675,10 +721,11 @@
           "strokeWeight": 1,
           "strokeAlign": "INSIDE",
           "strokesIncludedInLayout": true,
+          "clipsContent": true,
           "cornerRadius": 8,
           "opacity": 1,
-          "clipsContent": true,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "topLeftRadius": "radius/md",
@@ -699,7 +746,12 @@
               "layoutSizingHorizontal": "FILL",
               "layoutSizingVertical": "FIXED",
               "height": 160,
-              "fills": ["#e0e7ff"]
+              "fills": ["#e0e7ff"],
+              "cornerRadius": 0,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH",
+              "strokes": []
             },
             "measured": {
               "w": 318,
@@ -726,10 +778,11 @@
               "fills": [],
               "strokes": [],
               "strokesIncludedInLayout": false,
+              "clipsContent": false,
               "cornerRadius": 0,
               "opacity": 1,
-              "clipsContent": false,
-              "effects": []
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "itemSpacing": "space/2",
@@ -759,10 +812,11 @@
                   "fills": [],
                   "strokes": [],
                   "strokesIncludedInLayout": false,
+                  "clipsContent": false,
                   "cornerRadius": 0,
                   "opacity": 1,
-                  "clipsContent": false,
-                  "effects": []
+                  "effects": [],
+                  "blendMode": "PASS_THROUGH"
                 },
                 "bind": {
                   "itemSpacing": "space/2"
@@ -791,6 +845,11 @@
                       },
                       "fills": ["#18181b"],
                       "textAutoResize": "HEIGHT",
+                      "textDecoration": "NONE",
+                      "hyperlink": null,
+                      "opacity": 1,
+                      "effects": [],
+                      "blendMode": "PASS_THROUGH",
                       "textTruncation": "ENDING",
                       "maxLines": 2
                     },
@@ -833,7 +892,12 @@
                     "value": 0
                   },
                   "fills": ["#52525b"],
-                  "textAutoResize": "WIDTH_AND_HEIGHT"
+                  "textAutoResize": "WIDTH_AND_HEIGHT",
+                  "textDecoration": "NONE",
+                  "hyperlink": null,
+                  "opacity": 1,
+                  "effects": [],
+                  "blendMode": "PASS_THROUGH"
                 },
                 "bind": {
                   "fontSize": "font/size/md"
@@ -904,10 +968,11 @@
           "strokeWeight": 1,
           "strokeAlign": "INSIDE",
           "strokesIncludedInLayout": true,
+          "clipsContent": true,
           "cornerRadius": 8,
           "opacity": 1,
-          "clipsContent": true,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "topLeftRadius": "radius/md",
@@ -928,7 +993,12 @@
               "layoutSizingHorizontal": "FILL",
               "layoutSizingVertical": "FIXED",
               "height": 160,
-              "fills": ["#e0e7ff"]
+              "fills": ["#e0e7ff"],
+              "cornerRadius": 0,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH",
+              "strokes": []
             },
             "measured": {
               "w": 318,
@@ -955,10 +1025,11 @@
               "fills": [],
               "strokes": [],
               "strokesIncludedInLayout": false,
+              "clipsContent": false,
               "cornerRadius": 0,
               "opacity": 1,
-              "clipsContent": false,
-              "effects": []
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "itemSpacing": "space/2",
@@ -988,10 +1059,11 @@
                   "fills": [],
                   "strokes": [],
                   "strokesIncludedInLayout": false,
+                  "clipsContent": false,
                   "cornerRadius": 0,
                   "opacity": 1,
-                  "clipsContent": false,
-                  "effects": []
+                  "effects": [],
+                  "blendMode": "PASS_THROUGH"
                 },
                 "bind": {
                   "itemSpacing": "space/2"
@@ -1020,6 +1092,11 @@
                       },
                       "fills": ["#18181b"],
                       "textAutoResize": "WIDTH_AND_HEIGHT",
+                      "textDecoration": "NONE",
+                      "hyperlink": null,
+                      "opacity": 1,
+                      "effects": [],
+                      "blendMode": "PASS_THROUGH",
                       "textTruncation": "ENDING",
                       "maxLines": 2
                     },
@@ -1062,7 +1139,12 @@
                     "value": 0
                   },
                   "fills": ["#52525b"],
-                  "textAutoResize": "WIDTH_AND_HEIGHT"
+                  "textAutoResize": "WIDTH_AND_HEIGHT",
+                  "textDecoration": "NONE",
+                  "hyperlink": null,
+                  "opacity": 1,
+                  "effects": [],
+                  "blendMode": "PASS_THROUGH"
                 },
                 "bind": {
                   "fontSize": "font/size/md"
@@ -1133,10 +1215,11 @@
           "strokeWeight": 1,
           "strokeAlign": "INSIDE",
           "strokesIncludedInLayout": true,
+          "clipsContent": true,
           "cornerRadius": 8,
           "opacity": 1,
-          "clipsContent": true,
-          "effects": []
+          "effects": [],
+          "blendMode": "PASS_THROUGH"
         },
         "bind": {
           "topLeftRadius": "radius/md",
@@ -1157,7 +1240,12 @@
               "layoutSizingHorizontal": "FILL",
               "layoutSizingVertical": "FIXED",
               "height": 160,
-              "fills": ["#e0e7ff"]
+              "fills": ["#e0e7ff"],
+              "cornerRadius": 0,
+              "opacity": 1,
+              "effects": [],
+              "blendMode": "PASS_THROUGH",
+              "strokes": []
             },
             "measured": {
               "w": 318,
@@ -1184,10 +1272,11 @@
               "fills": [],
               "strokes": [],
               "strokesIncludedInLayout": false,
+              "clipsContent": false,
               "cornerRadius": 0,
               "opacity": 1,
-              "clipsContent": false,
-              "effects": []
+              "effects": [],
+              "blendMode": "PASS_THROUGH"
             },
             "bind": {
               "itemSpacing": "space/2",
@@ -1217,10 +1306,11 @@
                   "fills": [],
                   "strokes": [],
                   "strokesIncludedInLayout": false,
+                  "clipsContent": false,
                   "cornerRadius": 0,
                   "opacity": 1,
-                  "clipsContent": false,
-                  "effects": []
+                  "effects": [],
+                  "blendMode": "PASS_THROUGH"
                 },
                 "bind": {
                   "itemSpacing": "space/2"
@@ -1249,6 +1339,11 @@
                       },
                       "fills": ["#18181b"],
                       "textAutoResize": "WIDTH_AND_HEIGHT",
+                      "textDecoration": "NONE",
+                      "hyperlink": null,
+                      "opacity": 1,
+                      "effects": [],
+                      "blendMode": "PASS_THROUGH",
                       "textTruncation": "ENDING",
                       "maxLines": 2
                     },
@@ -1316,7 +1411,12 @@
                     "value": 0
                   },
                   "fills": ["#52525b"],
-                  "textAutoResize": "WIDTH_AND_HEIGHT"
+                  "textAutoResize": "WIDTH_AND_HEIGHT",
+                  "textDecoration": "NONE",
+                  "hyperlink": null,
+                  "opacity": 1,
+                  "effects": [],
+                  "blendMode": "PASS_THROUGH"
                 },
                 "bind": {
                   "fontSize": "font/size/md"

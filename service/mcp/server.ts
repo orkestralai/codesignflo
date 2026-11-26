@@ -5,6 +5,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createClient } from "@supabase/supabase-js";
 import cliPackage from "../../packages/cli/package.json" with { type: "json" };
+import pluginPackage from "../../packages/plugin/package.json" with { type: "json" };
 import { type BillingConfig, checkout, confirm, portal, refresh, syncSeats, webhook } from "./billing.ts";
 import { alexTick } from "./alex.ts";
 import { quitDemo, startDemo } from "./demo.ts";
@@ -61,6 +62,10 @@ export async function handle(cfg: ServerConfig, req: IncomingMessage, res: Serve
     return json(authorizationServer(cfg));
   if (path === "/register" && req.method === "POST") return register(cfg, JSON.parse((await readBody(req)) || "{}"), res, clientIp(req));
   if (path === "/authorize" && req.method === "GET") return authorize(cfg, url, res);
+  // The newest plugin (the one this deployment's /plugin.zip holds): an open plugin compares it with its own
+  // version and tells the designer a newer one is out (it isn't on Figma Community, which would update it).
+  if (path === "/api/plugin" && req.method === "GET")
+    return json({ version: pluginPackage.version, download: cfg.notify?.pluginUrl ?? `${cfg.base.replace(/\/$/, "")}/plugin.zip` });
   if (path === "/api/mcp-request" && req.method === "GET") return mcpRequestInfo(cfg, url.searchParams.get("id") ?? "", res);
   if (path === "/token" && req.method === "POST") return token(cfg, new URLSearchParams(await readBody(req)), res);
   if (path === "/install-code" && req.method === "POST") return redeemInstallCode(cfg, JSON.parse((await readBody(req)) || "{}"), res);
