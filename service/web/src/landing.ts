@@ -78,9 +78,9 @@ export function landingHtml(c: LandingConfig): string {
     <a href="#/" class="lp-brand">${logoSvg(26)}CoDesignFlo</a>
     <span class="grow"></span>
     <a href="#how" data-scroll="how" class="lp-nav">How it works</a>
+    <a href="#selfhost" data-scroll="selfhost" class="lp-nav lp-nav-wide">Self-host</a>
     <a href="#start" data-scroll="start" class="lp-nav">Get started</a>
     <a href="#pricing" data-scroll="pricing" class="lp-nav">Pricing</a>
-    <a href="#selfhost" data-scroll="selfhost" class="lp-nav lp-nav-wide">Self-host</a>
     ${REPO_URL ? `<a href="${REPO_URL}" target="_blank" rel="noopener" class="lp-nav lp-nav-wide">GitHub</a>` : ""}
     <a href="#/docs/designers" class="lp-nav">Docs</a>
     <a href="#/signin" class="lp-button lp-small">Sign in</a>
@@ -146,7 +146,44 @@ export function landingHtml(c: LandingConfig): string {
     </div>
   </section>
 
-  <section id="start" class="lp-section lp-paper">
+  <section id="selfhost" class="lp-section lp-paper">
+    <div class="lp-container">
+      <div class="lp-head">
+        <p class="lp-eyebrow">Open source</p>
+        <h2 class="lp-title-sm">Two ways <span class="lp-hl-text">to run it.</span></h2>
+        <p class="lp-lead">The same CoDesignFlo either way: Live, proposals, the plugin panel, coding agents over MCP. Let us run it, or run it for your team on your own machine.</p>
+      </div>
+      <div class="lp-grid lp-two">
+        <div class="lp-card">
+          <p class="lp-eyebrow lp-blue-text">Hosted by us</p>
+          <h3>Nothing to run</h3>
+          <ul>
+            <li>Sign in with ${signInWith} and start: install the plugin, connect your agent.</li>
+            <li>Updates, backups and email notifications are taken care of.</li>
+            <li>Developers free; designers ${FREE_SENDS} sends free, then a seat (<a href="#pricing" data-scroll="pricing">pricing</a>).</li>
+          </ul>
+          <div class="lp-card-foot"><a class="lp-button lp-primary" href="#start" data-scroll="start">Start free</a></div>
+        </div>
+        <div class="lp-card">
+          <p class="lp-eyebrow lp-blue-text">On your own server</p>
+          <h3>Free, and yours</h3>
+          <ul>
+            <li>One <code>docker compose up</code> on a developer's laptop, an office computer or a small cloud server.</li>
+            <li>Designers and developers on different computers work through it, by its own address.</li>
+            <li>No billing, no limits. Sign-in by email, invite-only, and everything stays on your server: nothing is sent to us.</li>
+            <li>Each designer downloads a Figma plugin made for your server from its Set up page.</li>
+          </ul>
+          <div class="lp-card-foot">
+            <p class="lp-note">Read the ${repoLink("/blob/main/selfhost/GUIDE.md", "self-hosting guide")}: where to run it, HTTPS, emails, backups and updates.</p>
+            ${REPO_URL ? `<a class="lp-button lp-outline" href="${REPO_URL}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
+          </div>
+        </div>
+      </div>
+      <p class="lp-vat">The Figma plugin, the CLI and the engine are MIT-licensed. The service and the self-hosting setup are under the Functional Source License: free for your own use, including running it for your team or your clients, not for offering a competing service; each release becomes Apache 2.0 after two years.</p>
+    </div>
+  </section>
+
+  <section id="start" class="lp-section lp-white">
     <div class="lp-container">
       <div class="lp-head">
         <p class="lp-eyebrow">Get started</p>
@@ -216,43 +253,6 @@ export function landingHtml(c: LandingConfig): string {
       <p class="lp-vat">${VAT_NOTE}</p>
       <p class="lp-vat">Invite a designer: their second month is free, and you get a month free when it starts. <a href="/terms">Terms</a></p>
       <p class="lp-vat">Prices are for the hosted service. On your own server, CoDesignFlo is free: no seats, no limits. <a href="#selfhost" data-scroll="selfhost">Self-hosting</a></p>
-    </div>
-  </section>
-
-  <section id="selfhost" class="lp-section lp-white">
-    <div class="lp-container">
-      <div class="lp-head">
-        <p class="lp-eyebrow">Open source</p>
-        <h2 class="lp-title-sm">Two ways <span class="lp-hl-text">to run it.</span></h2>
-        <p class="lp-lead">The same CoDesignFlo either way: Live, proposals, the plugin panel, coding agents over MCP. Let us run it, or run it for your team on your own machine.</p>
-      </div>
-      <div class="lp-grid lp-two">
-        <div class="lp-card">
-          <p class="lp-eyebrow lp-blue-text">Hosted by us</p>
-          <h3>Nothing to run</h3>
-          <ul>
-            <li>Sign in with ${signInWith} and start: install the plugin, connect your agent.</li>
-            <li>Updates, backups and email notifications are taken care of.</li>
-            <li>Developers free; designers ${FREE_SENDS} sends free, then a seat (<a href="#pricing" data-scroll="pricing">pricing</a>).</li>
-          </ul>
-          <div class="lp-card-foot"><a class="lp-button lp-primary" href="#start" data-scroll="start">Start free</a></div>
-        </div>
-        <div class="lp-card">
-          <p class="lp-eyebrow lp-blue-text">On your own server</p>
-          <h3>Free, and yours</h3>
-          <ul>
-            <li>One <code>docker compose up</code> on a developer's laptop, an office computer or a small cloud server.</li>
-            <li>Designers and developers on different computers work through it, by its own address.</li>
-            <li>No billing, no limits. Sign-in by email, invite-only, and everything stays on your server: nothing is sent to us.</li>
-            <li>Each designer downloads a Figma plugin made for your server from its Set up page.</li>
-          </ul>
-          <div class="lp-card-foot">
-            <p class="lp-note">Read the ${repoLink("/blob/main/selfhost/GUIDE.md", "self-hosting guide")}: where to run it, HTTPS, emails, backups and updates.</p>
-            ${REPO_URL ? `<a class="lp-button lp-outline" href="${REPO_URL}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
-          </div>
-        </div>
-      </div>
-      <p class="lp-vat">The Figma plugin, the CLI and the engine are MIT-licensed. The service and the self-hosting setup are under the Functional Source License: free for your own use, including running it for your team or your clients, not for offering a competing service; each release becomes Apache 2.0 after two years.</p>
     </div>
   </section>
 
