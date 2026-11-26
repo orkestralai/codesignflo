@@ -26,7 +26,7 @@ export function footerHtml(): string {
       <p class="lp-footer-tagline">Your app in Figma, always as built. Your designs in code, through your coding agent.</p>
       <a class="lp-footer-by" href="https://orkestralai.com" target="_blank" rel="noreferrer">
         <span>Brought to you by</span>
-        <span class="lp-footer-org"><img src="/orkestralai.jpg" alt="" width="36" height="36">OrkestralAI</span>
+        <span class="lp-footer-org"><img src="/orkestralai.svg" alt="" width="36" height="36">OrkestralAI</span>
       </a>
     </div>
     <div>
