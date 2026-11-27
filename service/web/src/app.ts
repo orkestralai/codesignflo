@@ -650,10 +650,22 @@ function connectPage(session: Session) {
 const designs = (session: Session, projects: Project[], designSide: boolean) =>
   projects.some((p) => p.role === "designer" || (p.role === "admin" && (designSide || session.user.app_metadata?.provider === "figma")));
 
+/** A request that didn't reach the service (a network drop, a phone switching networks): tried again once. */
+const offline = (e: { message?: string } | null) => !!e?.message && /failed to fetch|network ?error|load failed/i.test(e.message);
+async function retried<T extends { error: { message?: string } | null }>(call: () => PromiseLike<T>): Promise<T> {
+  const first = await call();
+  if (!offline(first.error)) return first;
+  await new Promise((r) => setTimeout(r, 1000));
+  return await call();
+}
+/** What a person reads when the service can't be reached, instead of the browser's "TypeError: Failed to fetch". */
+const reachError = (e: { message?: string } | null) =>
+  offline(e) ? "Couldn't reach CoDesignFlo just now. Check your connection, then reload the page." : (e?.message ?? "");
+
 async function projectsPage(session: Session) {
-  await sb.rpc("accept_invitations");
+  await retried(() => sb.rpc("accept_invitations"));
   const [{ data, error }, billing, me] = await Promise.all([
-    sb.rpc("my_projects"),
+    retried(() => sb.rpc("my_projects")),
     SELFHOST ? null : myBilling(sb),
     SELFHOST ? null : sb.from("profiles").select("design_side").eq("id", session.user.id).maybeSingle(),
   ]);
@@ -664,7 +676,7 @@ async function projectsPage(session: Session) {
   frame(
     session,
     "",
-    `<h1>Your projects</h1>${errorLine(error?.message ?? "")}${!SELFHOST && designs(session, projects, me?.data?.design_side === true) ? billingNotice(billing) : ""}
+    `<h1>Your projects</h1>${errorLine(reachError(error))}${!SELFHOST && designs(session, projects, me?.data?.design_side === true) ? billingNotice(billing) : ""}
     ${first ? connectCard() : ""}
     ${
       projects.length
@@ -1307,14 +1319,15 @@ async function route() {
     const [, page] = location.hash.split("/");
     // A self-hosted box has no landing page: its root is the app.
     if (SELFHOST || ADMIN_HOST || mcpRequest || deviceSignIn || (page && page !== "")) {
-      counterView("private");
+      if (counterView("private")) return;
       return signInScreen();
     }
     counterView("landing");
     return landingPage();
   }
-  // Signed in: never the visit counter (someone else's script) next to the session.
-  counterView("private");
+  // Signed in: never the visit counter (someone else's script) next to the session. Reloading to drop it: nothing
+  // more here (requests started now would be cut off by the reload, and show as "Failed to fetch").
+  if (counterView("private")) return;
   const ref = storedRef();
   if (ref) {
     // Once per browser: whatever the answer (bound, already referred, not a new account), it's done.

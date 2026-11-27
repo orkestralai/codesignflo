@@ -107,12 +107,17 @@ function loadChatbot() {
 }
 
 /** The page tells which view it shows; the counter and the chat load on the landing page only. */
-export function counterView(v: CounterView) {
+/** Returns true when the page is reloading (someone else's script was loaded): the caller stops there. */
+export function counterView(v: CounterView): boolean {
   view = v;
   if (v === "landing") {
     loadCounter();
     loadChatbot();
-  } else if (v === "private" && (loaded || chatbot)) location.reload();
+  } else if (v === "private" && (loaded || chatbot)) {
+    location.reload();
+    return true;
+  }
+  return false;
 }
 
 function banner(): HTMLElement {
