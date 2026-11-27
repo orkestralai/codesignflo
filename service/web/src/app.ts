@@ -11,7 +11,8 @@ import { counterView, initConsent } from "./consent.ts";
 import { logoSvg } from "./logo.ts";
 import { billingHtml, billingNotice, confirmCheckout, goToStripe, myBilling, myReferrals, mySeats, refreshBilling } from "./billing.ts";
 import { DOC_SLUGS, docHtml, docIndex, docTitle } from "./docs.ts";
-import { landingHtml } from "./landing.ts";
+import { landingHtml, showLaunchSpots } from "./landing.ts";
+import { launchOn } from "./pricing.ts";
 import { LEGAL_PAGES, LEGAL_TITLES, type LegalPage, legalHtml } from "./legal.ts";
 
 type Config = {
@@ -417,6 +418,42 @@ async function approveAgent(session: Session, error = "") {
     if (r.state) to.searchParams.set("state", r.state);
     show(`<section class="narrow"><h1>Connected</h1><p>Go back to your coding agent. You can close this tab.</p></section>`);
     location.href = to.toString();
+  });
+}
+
+/**
+ * Once after signing in (and again when the Terms or the Privacy policy change): agreeing to them, needed to use
+ * CoDesignFlo, and product news by email, optional. Recorded in the service (consents), with the version agreed to.
+ * Every sign-in comes through this website (the plugin's and the CLI's codes, coding agents too), so it's asked here.
+ */
+function consentScreen(session: Session, error = "") {
+  show(`<section class="narrow"><h1>Before you start</h1>
+    <p>Signed in as ${esc(session.user.email ?? session.user.id)}. To use CoDesignFlo, please agree to its Terms and Privacy policy.</p>
+    <div class="consent-box">
+      <label class="check"><input type="checkbox" id="agreeTerms"><span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and the <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>.</span></label>
+      <label class="check"><input type="checkbox" id="agreeNews"><span>Email me product news and offers now and then (optional, you can stop any time).</span></label>
+    </div>
+    <div class="row"><button class="primary" id="agree" disabled>Continue</button><button id="disagree">Don't agree</button></div>
+    <p class="muted">If you don't agree, you're signed out. To delete your account, write to contact@orkestralai.com.</p>
+    ${errorLine(error)}</section>`);
+  const terms = $<HTMLInputElement>("agreeTerms")!;
+  const agree = $<HTMLButtonElement>("agree")!;
+  terms.onchange = () => {
+    agree.disabled = !terms.checked;
+  };
+  on("disagree", async () => {
+    await sb.auth.signOut({ scope: "local" });
+    void route();
+  });
+  on("agree", async () => {
+    agree.disabled = true;
+    const { error: e } = await sb.rpc("record_consent", {
+      p_terms: terms.checked,
+      p_marketing: $<HTMLInputElement>("agreeNews")!.checked,
+      p_source: mcpRequest ? "agent" : "web",
+    });
+    if (e) return consentScreen(session, e.message);
+    void route();
   });
 }
 
@@ -1153,14 +1190,15 @@ async function billingPage(session: Session, error = "") {
   // change made in Stripe shows even when its webhook didn't arrive.
   if (location.hash.includes("refresh=1")) window.history.replaceState(null, "", "#/billing");
   if (!backFromCheckout || !back) await refreshBilling(session.access_token);
-  const [b, seats, referrals] = await Promise.all([myBilling(sb), mySeats(sb), myReferrals(sb)]);
+  const [b, seats, referrals, spots] = await Promise.all([myBilling(sb), mySeats(sb), myReferrals(sb), sb.rpc("launch_spots")]);
+  const launchLeft = (spots.data as { remaining: number }[] | null)?.[0]?.remaining ?? 0;
   const done: "" | "waiting" | "slow" = !backFromCheckout || b?.subscribed ? "" : Date.now() - backFromCheckout.at < 60_000 ? "waiting" : "slow";
   // Shown: the address goes back to plain Billing (a reload doesn't confirm again).
   if (backFromCheckout && done !== "waiting") {
     backFromCheckout = null;
     window.history.replaceState(null, "", "#/billing");
   }
-  frame(session, ' / <a href="#/billing">Billing</a>', billingHtml(b, seats, me, done, error, referrals));
+  frame(session, ' / <a href="#/billing">Billing</a>', billingHtml(b, seats, me, done, error, referrals, launchLeft));
   const say = (t: string) => {
     const m = $("seatMsg");
     if (m) m.textContent = t;
@@ -1200,6 +1238,24 @@ async function billingPage(session: Session, error = "") {
 }
 
 /** What CoDesignFlo is and how to start, for someone not signed in (sign-in links skip it). */
+/** The launch places left on the landing page: now, then every minute while it's shown. */
+let spotsTimer: ReturnType<typeof setInterval> | undefined;
+async function launchSpots() {
+  if (!launchOn()) return;
+  const load = async () => {
+    if (!document.querySelector("[data-spots]")) {
+      clearInterval(spotsTimer);
+      spotsTimer = undefined;
+      return;
+    }
+    const { data, error } = await sb.rpc("launch_spots");
+    const left = (data as { remaining: number }[] | null)?.[0]?.remaining;
+    if (!error && typeof left === "number") showLaunchSpots(left);
+  };
+  await load();
+  if (!spotsTimer) spotsTimer = setInterval(() => void load(), 60_000);
+}
+
 function landingPage() {
   show(
     landingHtml({
@@ -1213,6 +1269,7 @@ function landingPage() {
   );
   document.title = "CoDesignFlo — your app in Figma, your designs in code";
   wireScroll();
+  void launchSpots();
   for (const b of app.querySelectorAll<HTMLButtonElement>("[data-signin]"))
     b.onclick = () => oauth(b.dataset.signin as "figma" | "google" | "github", `${location.origin}/#/`);
 }
@@ -1270,6 +1327,14 @@ async function route() {
       }
   }
   document.title = "CoDesignFlo";
+  // The Terms and the Privacy policy agreed to (current version) before anything else. Can't tell (the service
+  // didn't answer): not asked now, rather than locking everyone out.
+  if (!SELFHOST && !ADMIN_HOST) {
+    const { data: consent } = await sb.rpc("my_consent");
+    if (seq !== routeSeq) return;
+    const now = (consent as { agreed: boolean }[] | null)?.[0];
+    if (now && !now.agreed) return consentScreen(session);
+  }
   if (mcpRequest) return approveAgent(session);
   if (deviceSignIn) return approveDevice(session);
   const [, page, id] = location.hash.split("/");

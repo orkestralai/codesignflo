@@ -12,6 +12,8 @@ import { logoSvg } from "./logo.ts";
  * then: the page describes self-hosting without links.
  */
 const REPO_URL = "https://github.com/orkestralai/codesignflo";
+/** CoDesignFlo's Discord: questions, feedback, feature requests (the FAQ's banner). */
+const DISCORD_URL = "https://discord.gg/6HSu3tywW";
 const repoLink = (path: string, label: string) =>
   REPO_URL ? `<a href="${REPO_URL}${path}" target="_blank" rel="noopener">${label}</a>` : label;
 
@@ -31,6 +33,28 @@ export type LandingConfig = {
   /** The sign-in methods the service offers (the web app's; absent: Figma and GitHub). */
   signIn?: ("figma" | "google" | "github" | "email")[];
 };
+
+/**
+ * The launch places left, live: the counter in the Designers card, and the regular price once they're gone
+ * (the page is drawn before the count arrives: the launch price shows until then, as checkout still gives it).
+ */
+export function showLaunchSpots(remaining: number) {
+  const box = document.querySelector<HTMLElement>("[data-spots]");
+  if (!box) return;
+  if (remaining > 0) {
+    box.querySelector("[data-spots-left]")!.textContent = remaining.toLocaleString("en");
+    (box.querySelector("[data-spots-fill]") as HTMLElement).style.width = `${Math.max(2, (100 * remaining) / LAUNCH.spots)}%`;
+    box.hidden = false;
+    return;
+  }
+  const set = (sel: string, html: string) => {
+    const el = document.querySelector(sel);
+    if (el) el.innerHTML = html;
+  };
+  set("[data-launch-offer]", `<span>${FREE_SENDS} sends to dev free</span><span class="lp-offer-alt">Launch seats all taken</span>`);
+  set("[data-launch-price]", `€${SEAT_EUR} <span class="lp-muted">per designer / month</span>`);
+  set("[data-launch-small]", "VAT included.");
+}
 
 const LOOP = [
   {
@@ -247,9 +271,10 @@ export function landingHtml(c: LandingConfig): string {
           <p class="lp-eyebrow lp-blue-text">Designers</p>
           ${
             launchOn()
-              ? `<p class="lp-offer"><span>${FREE_SENDS} sends to dev free</span><span class="lp-offer-alt">Launch price until ${LAUNCH.until}</span></p>
-          <h3 class="lp-price"><s class="lp-was" aria-label="Regular price €${SEAT_EUR}">€${SEAT_EUR}</s> €${LAUNCH.eur} <span class="lp-muted">per designer / month</span></h3>
-          <p class="lp-small">VAT included. For your first ${LAUNCH.months} months when you subscribe by ${LAUNCH.until}; then €${SEAT_EUR}.</p>`
+              ? `<p class="lp-offer" data-launch-offer><span>${FREE_SENDS} sends to dev free</span><span class="lp-offer-alt">Launch price until ${LAUNCH.until}</span></p>
+          <h3 class="lp-price" data-launch-price><s class="lp-was" aria-label="Regular price €${SEAT_EUR}">€${SEAT_EUR}</s> €${LAUNCH.eur} <span class="lp-muted">per designer / month</span></h3>
+          <p class="lp-small" data-launch-small>VAT included. For your first ${LAUNCH.months} months when you subscribe by ${LAUNCH.until}, for the first ${LAUNCH.spots.toLocaleString("en")} designer seats; then €${SEAT_EUR}.
+            <span class="lp-spots" data-spots hidden><span class="lp-spots-line"><b class="lp-spots-num" data-spots-left></b> of ${LAUNCH.spots.toLocaleString("en")} launch seats left</span><span class="lp-spots-bar" aria-hidden="true"><span data-spots-fill></span></span></span></p>`
               : `<p class="lp-offer"><span>${FREE_SENDS} sends to dev free</span></p>
           <h3 class="lp-price">€${SEAT_EUR} <span class="lp-muted">per designer / month</span></h3>
           <p class="lp-small">VAT included.</p>`
@@ -257,8 +282,12 @@ export function landingHtml(c: LandingConfig): string {
           <p>A seat belongs to the designer and works in every project, theirs or anyone's. Pay for your own, or for your team's designers by email. Cancel any time.</p>
         </div>
       </div>
+      <div class="lp-refer">
+        <span class="lp-refer-stamp">Refer a designer</span>
+        <p class="lp-refer-title">Invite a designer: <span class="lp-refer-hl">their second month is free</span>, and <span class="lp-refer-hl">you get a month free</span> when it starts.</p>
+        <a class="lp-refer-terms" href="/terms">Terms</a>
+      </div>
       <p class="lp-vat">${VAT_NOTE}</p>
-      <p class="lp-vat">Invite a designer: their second month is free, and you get a month free when it starts. <a href="/terms">Terms</a></p>
       <p class="lp-vat">Prices are for the hosted service. On your own server, CoDesignFlo is free: no seats, no limits. <a href="#selfhost" data-scroll="selfhost">Self-hosting</a></p>
     </div>
   </section>
@@ -280,6 +309,14 @@ export function landingHtml(c: LandingConfig): string {
         <div class="lp-qa"><h3>Hosted or self-hosted: which one?</h3><p>Hosted if you'd rather not run anything: sign in and start, with updates, backups and emails handled. Self-hosted if your designs and app shouldn't leave your network, or you'd rather not pay per seat: you run it with Docker, keep it updated and back it up.</p></div>
         <div class="lp-qa"><h3>We already have a design system in Figma.</h3><p>Bring it onto a Design System page: instances from your team library, or copies. Link each component to the code's (the plugin suggests the pairs), and Live's pages are drawn with yours, each pair showing where it differs from what the app draws. The code's components you haven't got wait there to be accepted, matched or ignored.</p></div>
         <div class="lp-ask"><h3>Still have a question?</h3><p>Ask our support assistant anything about CoDesignFlo, and get an answer right away.</p><a class="lp-button lp-primary" href="mailto:contact@orkestralai.com?subject=CoDesignFlo" data-chat>Chat with support</a></div>
+      </div>
+      <div class="lp-discord">
+        <span class="lp-discord-stamp">Community</span>
+        <div class="lp-discord-text">
+          <p class="lp-discord-title">Talk to us on Discord.</p>
+          <p>Ask questions, give feedback and request new features, straight to the people building CoDesignFlo.</p>
+        </div>
+        <a class="lp-button lp-primary lp-big" href="${DISCORD_URL}" target="_blank" rel="noopener">Join the Discord</a>
       </div>
     </div>
   </section>

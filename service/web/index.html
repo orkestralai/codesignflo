@@ -87,6 +87,9 @@
       .card label { display: block; margin: 8px 0 4px; color: var(--muted); }
       .card label.check { display: flex; gap: 8px; align-items: center; color: var(--fg); }
       .card label.check input { height: auto; }
+      .consent-box { display: grid; gap: 14px; margin: 18px 0; padding: 16px; border: 1px solid var(--line, #333); border-radius: 8px; }
+      .consent-box label.check { display: flex; gap: 10px; align-items: flex-start; line-height: 1.5; color: var(--fg); }
+      .consent-box label.check input { height: auto; margin-top: 4px; flex: none; }
       .count { color: var(--muted); font-weight: 400; }
       .list { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
       .item { display: flex; flex-direction: column; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; color: var(--fg); }
@@ -442,6 +445,38 @@
       .lp-qa { border-top-width: 3px; }
       .lp-qa:hover h3 { color: var(--blue); }
       .lp-ask { border: 3px solid var(--ink); box-shadow: 10px 10px 0 var(--blue); }
+      /* Good to know: the Discord banner, a black slab under the questions with a tilted blue stamp and a hard blue shadow. */
+      .lp-discord { position: relative; max-width: 980px; margin: 56px auto 10px; padding: 36px 30px 28px; background: var(--ink); color: #fff;
+        border: 3px solid var(--ink); box-shadow: 10px 10px 0 var(--blue); display: flex; flex-wrap: wrap; align-items: center; gap: 18px 32px; }
+      .lp-discord-stamp { position: absolute; top: -17px; left: 22px; background: var(--blue); color: #fff; border: 2px solid var(--ink);
+        padding: 6px 12px; transform: rotate(-3deg); box-shadow: 4px 4px 0 var(--ink);
+        font: 900 13px/1 "Space Grotesk", Inter, sans-serif; text-transform: uppercase; letter-spacing: 0.08em; }
+      .lp-discord-text { flex: 1 1 380px; min-width: 0; }
+      .lp-discord-title { margin: 0 0 8px; font: 900 clamp(24px, 3.2vw, 36px)/1.1 "Space Grotesk", Inter, sans-serif; }
+      .lp-discord-text p:not(.lp-discord-title) { margin: 0; color: rgba(255,255,255,0.78); font-size: 16px; line-height: 1.6; }
+      .lp-discord .lp-button.lp-primary { border-color: #fff; box-shadow: 5px 5px 0 #fff; }
+      .lp-discord .lp-button.lp-primary:hover { background: #fff; color: var(--ink) !important; }
+      @media (max-width: 600px) { .lp-discord { padding: 32px 18px 22px; box-shadow: 6px 6px 0 var(--blue); } }
+      /* Pricing: the referral offer, a blue slab with a tilted stamp, hard white shadow on the dark section. */
+      /* Pricing: the launch seats left, live: a hard black chip, its number in blue, and a bar that empties. */
+      .lp-spots { display: block; margin-top: 14px; }
+      .lp-spots[hidden] { display: none; }
+      .lp-spots-line { display: inline-block; background: var(--ink); color: #fff; padding: 6px 10px; border: 2px solid var(--ink);
+        box-shadow: 4px 4px 0 var(--blue); font: 700 13px/1.2 Inter, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; }
+      .lp-spots-num { color: #7aa7ff; font: 900 18px/1 "Space Grotesk", Inter, sans-serif; margin-right: 2px; }
+      .lp-spots-bar { display: block; height: 10px; margin-top: 12px; border: 2px solid var(--ink); background: #fff; }
+      .lp-spots-bar > span { display: block; height: 100%; background: var(--blue); transition: width 0.6s ease; }
+      @media (prefers-reduced-motion: reduce) { .lp-spots-bar > span { transition: none; } }
+      .lp-refer { position: relative; margin: 44px 0 34px; padding: 34px 30px 26px; background: var(--blue); color: #fff;
+        border: 3px solid #fff; box-shadow: 10px 10px 0 #fff; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 28px; }
+      .lp-refer-stamp { position: absolute; top: -17px; left: 22px; background: #fff; color: var(--ink); border: 2px solid var(--ink);
+        padding: 6px 12px; transform: rotate(-3deg); box-shadow: 4px 4px 0 var(--ink);
+        font: 900 13px/1 "Space Grotesk", Inter, sans-serif; text-transform: uppercase; letter-spacing: 0.08em; }
+      .lp-refer-title { flex: 1 1 420px; min-width: 0; margin: 0; font: 900 clamp(22px, 3vw, 34px)/1.45 "Space Grotesk", Inter, sans-serif; text-wrap: balance; }
+      .lp-refer-hl { background: var(--ink); color: #fff; padding: 0 0.18em 0.04em; margin: 0 0.1em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+      .lp-refer-terms { color: #fff !important; font-weight: 700; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+      .lp-refer-terms:hover { color: var(--ink) !important; }
+      @media (max-width: 600px) { .lp-refer { padding: 30px 18px 20px; box-shadow: 6px 6px 0 #fff; } }
       /* The ticker: the Day to day titles scrolling on a black band. */
       .lp-marquee { overflow: hidden; background: var(--ink); color: #fff; border-top: 4px solid var(--ink); padding: 16px 0; }
       .lp-marquee-track { display: flex; width: max-content; animation: lp-marquee 42s linear infinite; }

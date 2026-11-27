@@ -110,6 +110,7 @@ export type MainToUi =
   | { kind: "edited" }
   | { kind: "reloadUi"; html: string }
   /** The designer changed Live or a lane item (it's the code's): what the panel says. */
-  | { kind: "liveEdited"; names: string[]; inside: boolean };
+  | { kind: "liveEdited"; names: string[]; inside: boolean }
+  | { kind: "notYours"; owner: string };
 
 export type { PanelState };

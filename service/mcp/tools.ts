@@ -1,6 +1,7 @@
 // The hosted MCP's tools. Everything is read from and written to the service as the signed-in person (row
 // level security decides what they can see); the only thing that runs on the developer's machine is the
 // render command `sync` hands back, which the agent runs in the app's folder.
+import { versionBelow } from "./pluginnews.ts";
 import {
   adoptForeignVariables,
   askEvent,
@@ -157,19 +158,28 @@ async function member(c: SupabaseClient, project: string): Promise<{ name: strin
 async function liveState(
   c: SupabaseClient,
   project: string,
-): Promise<{ newest: LiveRow | null; applied: LiveRow | null; seenAt: string | null; error?: string }> {
+): Promise<{ newest: LiveRow | null; applied: LiveRow | null; seenAt: string | null; oldPlugin?: string; error?: string }> {
   const cols = "commit, status, created_at, taken_at, progress, log, cli:payload->setup->>cli";
   const base = () => c.from("live_updates").select(cols).eq("project_id", project).eq("kind", "live");
-  const [n, a, seen] = await Promise.all([
+  const [n, a, seen, min] = await Promise.all([
     base().neq("status", "superseded").order("id", { ascending: false }).limit(1),
     base().eq("status", "applied").order("id", { ascending: false }).limit(1),
-    c.from("plugin_presence").select("seen_at").eq("project_id", project).order("seen_at", { ascending: false }).limit(1),
+    c.from("plugin_presence").select("*").eq("project_id", project).order("seen_at", { ascending: false }).limit(1),
+    c.rpc("plugin_minimum"),
   ]);
+  // The plugin open last is older than the service lets apply Live updates: say why Live waits.
+  const last = ((seen.data ?? []) as { plugin_version?: string | null }[])[0];
+  const minimum = !min.error && typeof min.data === "string" ? min.data : null;
+  const oldPlugin =
+    last && minimum && versionBelow(last.plugin_version, minimum)
+      ? `The designer's CoDesignFlo plugin is ${last.plugin_version ? `version ${last.plugin_version}` : "from before 0.5.9"}, older than ${minimum}, the oldest that applies Live updates: Live waits until they update it (they're told in the plugin and by email). Tell the user.`
+      : undefined;
   const error = n.error?.message ?? a.error?.message;
   return {
     newest: ((n.data ?? []) as LiveRow[])[0] ?? null,
     applied: ((a.data ?? []) as LiveRow[])[0] ?? null,
     seenAt: ((seen.data ?? []) as { seen_at: string }[])[0]?.seen_at ?? null,
+    ...(oldPlugin ? { oldPlugin } : {}),
     ...(error ? { error } : {}),
   };
 }
@@ -276,7 +286,7 @@ export function server(ctx: Context): McpServer {
         lines.push(
           st.error
             ? `Live: couldn't read how Live stands (${st.error}).`
-            : `${liveStateLine(lb, st.newest, st.applied, st.seenAt)}.${live ? ` Behind? \`git fetch -q origin ${proj.liveBranch ?? ""} && git rev-list --count ${live.commit}..origin/${proj.liveBranch ?? "main"}\` — if more than 0 and you're on ${lb} with everything committed, sync.` : ""}`,
+            : `${liveStateLine(lb, st.newest, st.applied, st.seenAt)}.${st.oldPlugin ? ` ${st.oldPlugin}` : ""}${live ? ` Behind? \`git fetch -q origin ${proj.liveBranch ?? ""} && git rev-list --count ${live.commit}..origin/${proj.liveBranch ?? "main"}\` — if more than 0 and you're on ${lb} with everything committed, sync.` : ""}`,
         );
         // How closely each page follows the designer's design (Live shows the app; the design is compared with).
         const match = (live?.log ?? "").split("\n").filter((l) => l.includes("like the designer's design"));

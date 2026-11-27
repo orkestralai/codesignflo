@@ -79,7 +79,9 @@ function loadCounter() {
  * The chat assistant on the landing page (OrkestralAI's embed, answering questions about CoDesignFlo). Someone
  * else's script like the counter, so the same rules: the public landing page only, for someone not signed in, never
  * with a sign-in link open; a session appearing reloads the page without it. Not pinned by integrity: the embed
- * changes with the bot. Needs no consent: it sets no cookies, and is there to be asked.
+ * changes with the bot. Needs no consent: on load it stores nothing (the script and its settings only); the chat
+ * window (a lazy iframe on orkestralai.com, hidden until opened) keeps a random visitor id there once opened, which
+ * the chat the visitor asked for needs. Described in the privacy policy and on /cookies.
  */
 const CHATBOT: Record<string, string> = {
   src: "https://www.orkestralai.com/embed.js",
@@ -154,6 +156,14 @@ export function initConsent() {
     if (!a) return;
     e.preventDefault();
     openConsent();
+  });
+  // "Chat with support" opens the chat assistant; where it isn't loaded (signed in), the link's email instead.
+  document.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest("[data-chat]")) return;
+    const chat = (window as { OrkestralAIEmbed?: { open?: () => void } }).OrkestralAIEmbed;
+    if (!chat?.open) return;
+    e.preventDefault();
+    chat.open();
   });
 }
 

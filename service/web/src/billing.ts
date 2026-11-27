@@ -120,7 +120,16 @@ function mine(b: MyBilling, me: string, paysOwn: boolean): string {
     ${paysOwn ? "" : `<div class="row"><button id="seatMe" class="primary">Pay for my seat</button></div>`}`;
 }
 
-export function billingHtml(b: MyBilling | null, seats: Seat[], me: string, done: "" | "waiting" | "slow", error = "", referrals: MyReferrals | null = null): string {
+export function billingHtml(
+  b: MyBilling | null,
+  seats: Seat[],
+  me: string,
+  done: "" | "waiting" | "slow",
+  error = "",
+  referrals: MyReferrals | null = null,
+  /** Launch seats left (of LAUNCH.spots): the launch price only when there's a place for each of these seats. */
+  launchLeft = 0,
+): string {
   const head = `<h1>Billing</h1><p class="muted">${seatPrice()}. A seat belongs to a designer and works in every project. Developers are free.</p><p class="muted">${VAT_NOTE}</p>`;
   if (!b) return `${head}<p class="err">Couldn't read your billing. Reload the page.</p>`;
   const err = error ? `<p class="err">${esc(error)}</p>` : "";
@@ -134,7 +143,7 @@ export function billingHtml(b: MyBilling | null, seats: Seat[], me: string, done
   const n = seats.length;
   const total = !n
     ? ""
-    : launchOn() && !b.subscribed
+    : launchOn() && !b.subscribed && launchLeft >= n
       ? `€${LAUNCH.eur * n} a month for ${LAUNCH.months} months if you subscribe by ${LAUNCH.until}, then €${SEAT_EUR * n}, VAT included`
       : `€${SEAT_EUR * n} a month, VAT included`;
   const rows = seats

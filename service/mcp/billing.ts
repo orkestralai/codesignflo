@@ -139,6 +139,16 @@ async function seatsOf(db: SupabaseClient, userId: string): Promise<number> {
   return Number(data ?? 0);
 }
 
+/** Launch places left (of LAUNCH.spots); none when the service can't say, so no one gets a price it can't count. */
+async function launchSpotsLeft(db: SupabaseClient): Promise<number> {
+  const { data, error } = await db.rpc("launch_spots");
+  if (error) {
+    console.error("launch_spots:", error.message);
+    return 0;
+  }
+  return ((data as { remaining: number }[] | null)?.[0]?.remaining ?? 0) as number;
+}
+
 /** Stripe Checkout for the signed-in payer: a subscription for the seats they pay for, charged from today. */
 export async function checkout(cfg: BillingConfig, db: SupabaseClient, user: { id: string; email?: string | null }, web: string, res: ServerResponse) {
   if (!cfg.secretKey) return reply(res, 503, { error: "payments aren't set up on this server yet" });
@@ -159,12 +169,14 @@ export async function checkout(cfg: BillingConfig, db: SupabaseClient, user: { i
   }
   const seats = await seatsOf(db, user.id);
   if (!seats) return reply(res, 400, { error: "add the designers you pay for first (yourself, or others by email)" });
+  // The launch price while it runs and while there are places for all these seats (the first 1,000 seats).
+  const launch = launchOn() && (await launchSpotsLeft(db)) >= seats;
   const session = await stripe<{ url: string }>(cfg, "POST", "checkout/sessions", {
     mode: "subscription",
     customer,
     client_reference_id: user.id,
     line_items: [{ price: await priceId(cfg), quantity: seats }],
-    subscription_data: { metadata: { user_id: user.id } },
+    subscription_data: { metadata: { user_id: user.id, ...(launch ? { launch: "1" } : {}) } },
     // VAT: Stripe Tax works it out from the billing address and takes it out of the price (19% in Germany, German
     // VAT for consumers elsewhere in the EU under the OSS threshold, reverse charge for EU businesses with a VAT ID).
     automatic_tax: { enabled: true },
@@ -172,7 +184,7 @@ export async function checkout(cfg: BillingConfig, db: SupabaseClient, user: { i
     tax_id_collection: { enabled: true },
     customer_update: { address: "auto", name: "auto" },
     // Stripe takes either a discount or promotion codes: the launch coupon while it runs, codes after.
-    ...(launchOn() ? { discounts: [{ coupon: await launchCoupon(cfg) }] } : { allow_promotion_codes: true }),
+    ...(launch ? { discounts: [{ coupon: await launchCoupon(cfg) }] } : { allow_promotion_codes: true }),
     // Back with the session: the page confirms it (confirm below), so the subscription shows even before
     // Stripe's webhook arrives, or when it doesn't.
     success_url: `${web}/#/billing?done=1&session={CHECKOUT_SESSION_ID}`,
@@ -198,7 +210,7 @@ type Sub = {
   /** Set when it's cancelled for later (at the end of the period, or a date). */
   cancel_at?: number | null;
   cancel_at_period_end?: boolean;
-  metadata?: { user_id?: string };
+  metadata?: { user_id?: string; launch?: string };
   items?: { data: { id: string; quantity: number; current_period_end?: number }[] };
 };
 
@@ -212,6 +224,8 @@ async function mirror(cfg: BillingConfig, db: SupabaseClient, sub: Sub, gone = f
     status: sub.status,
     current_period_end: end ? new Date(end * 1000).toISOString() : null,
     seats: item?.quantity ?? 0,
+    // Given the launch price at checkout: its seats count toward the 1,000 (the database keeps the most it had).
+    ...(sub.metadata?.launch === "1" ? { launch: true } : {}),
     cancel_at: !gone && sub.cancel_at ? new Date(sub.cancel_at * 1000).toISOString() : !gone && sub.cancel_at_period_end && end ? new Date(end * 1000).toISOString() : null,
     updated_at: new Date().toISOString(),
   };

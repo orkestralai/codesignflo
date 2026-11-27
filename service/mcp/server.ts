@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { createClient } from "@supabase/supabase-js";
 import cliPackage from "../../packages/cli/package.json" with { type: "json" };
 import pluginPackage from "../../packages/plugin/package.json" with { type: "json" };
+import { pluginUpdateEmails } from "./pluginnews.ts";
 import { type BillingConfig, checkout, confirm, portal, refresh, syncSeats, webhook } from "./billing.ts";
 import { alexTick } from "./alex.ts";
 import { quitDemo, startDemo } from "./demo.ts";
@@ -64,8 +65,9 @@ export async function handle(cfg: ServerConfig, req: IncomingMessage, res: Serve
   if (path === "/authorize" && req.method === "GET") return authorize(cfg, url, res);
   // The newest plugin (the one this deployment's /plugin.zip holds): an open plugin compares it with its own
   // version and tells the designer a newer one is out (it isn't on Figma Community, which would update it).
+  // With the oldest plugin that may still apply Live updates: an older one says it must be updated.
   if (path === "/api/plugin" && req.method === "GET")
-    return json({ version: pluginPackage.version, download: cfg.notify?.pluginUrl ?? `${cfg.base.replace(/\/$/, "")}/plugin.zip` });
+    return json({ version: pluginPackage.version, minimum: await pluginMinimum(cfg), download: pluginDownload(cfg) });
   if (path === "/api/mcp-request" && req.method === "GET") return mcpRequestInfo(cfg, url.searchParams.get("id") ?? "", res);
   if (path === "/token" && req.method === "POST") return token(cfg, new URLSearchParams(await readBody(req)), res);
   if (path === "/install-code" && req.method === "POST") return redeemInstallCode(cfg, JSON.parse((await readBody(req)) || "{}"), res);
@@ -234,6 +236,21 @@ async function redeemTicket(cfg: ServerConfig, body: { ticket?: string }, res: S
   });
 }
 
+/** Where the newest plugin is (this deployment's /plugin.zip, unless PLUGIN_INSTALL_URL says otherwise). */
+const pluginDownload = (cfg: ServerConfig) => cfg.notify?.pluginUrl ?? `${cfg.base.replace(/\/$/, "")}/plugin.zip`;
+
+/** The oldest plugin that may apply Live updates (the database decides: plugin_minimum); asked at most every 5 min. */
+let minimumCache: { at: number; v: string } | null = null;
+async function pluginMinimum(cfg: ServerConfig): Promise<string> {
+  if (minimumCache && Date.now() - minimumCache.at < 5 * 60_000) return minimumCache.v;
+  const { data, error } = await admin(cfg).rpc("plugin_minimum");
+  if (error) console.error("plugin_minimum:", error.message);
+  // A database without it yet: no minimum (every plugin may apply updates, as before).
+  const v = !error && typeof data === "string" ? data : "0.0.0";
+  minimumCache = { at: Date.now(), v };
+  return v;
+}
+
 let lastPersonDrain = 0;
 let lastReferralTick = 0;
 /**
@@ -250,7 +267,13 @@ async function sendNotifications(cfg: ServerConfig, req: IncomingMessage, res: S
     if (Date.now() - lastPersonDrain < 3000) return reply(res, 202, { queued: true });
     lastPersonDrain = Date.now();
   }
-  const r = await drain(admin(cfg), { web: cfg.web, mcp: `${cfg.base}/mcp`, ...cfg.notify, selfhost: cfg.selfhost });
+  const notify = { web: cfg.web, mcp: `${cfg.base}/mcp`, ...cfg.notify, selfhost: cfg.selfhost };
+  const r = await drain(admin(cfg), notify);
+  // A new plugin: designers whose plugin is behind hear about it (the daily cron, once per version each).
+  if (sameSecret(given, cfg.cronSecret))
+    await pluginUpdateEmails(admin(cfg), notify, pluginPackage.version, pluginDownload(cfg), await pluginMinimum(cfg)).catch((e) =>
+      console.error("plugin emails:", e),
+    );
   // A self-hosted box has no billing: no seats to sync with Stripe, no referrals.
   if (cfg.selfhost) return reply(res, 200, { ...r, seats: 0 });
   // Designers joined or left (the database pings this too): the seats billed follow.

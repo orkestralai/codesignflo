@@ -277,7 +277,12 @@ export async function cloudSync(
         .select("id")
         .single(),
   );
-  if (error) throw new Error(`couldn't upload to the service: ${error.message}`);
+  if (error)
+    throw new Error(
+      /live_updates_(bundle|payload)_size/.test(error.message)
+        ? "this update is larger than the service accepts (64 MB compressed): sync fewer stories with only=[…], or write to contact@orkestralai.com"
+        : `couldn't upload to the service: ${error.message}`,
+    );
   const at = `${p.branch ?? "detached"} @${p.commit.slice(0, 7)}`;
   console.log(
     p.kind === "live"
@@ -362,7 +367,12 @@ export async function uploadMedia(cloud: Cloud, images: Map<string, string>): Pr
         upsert: false,
       });
       // Uploaded meanwhile (another sync): it's there, which is all that matters.
-      if (error && !/exists|duplicate/i.test(error.message)) throw new Error(`couldn't upload a picture to the service: ${error.message}`);
+      if (error && !/exists|duplicate/i.test(error.message))
+        throw new Error(
+          /row-level security|policy/i.test(error.message)
+            ? "the service refused a picture: only the project's developers and admins upload pictures, and a project holds at most 100,000 pictures and 10 GB (write to contact@orkestralai.com if yours needs more)"
+            : `couldn't upload a picture to the service: ${error.message}`,
+        );
       sent++;
     }
   };

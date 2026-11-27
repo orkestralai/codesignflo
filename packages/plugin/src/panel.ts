@@ -47,7 +47,7 @@ import {
   writeBase,
   writeClaim,
 } from "./facts.js";
-import { editable } from "./guard.js";
+import { editable, mine, othersCopyOwner } from "./guard.js";
 import { applyOps, type Op } from "./rebase.js";
 import { snapshot } from "./serialize.js";
 
@@ -63,6 +63,8 @@ export type PanelRow = {
   review?: NonNullable<ComponentState["claim"]>["review"];
   /** Who claimed it (the designer working on it). */
   claimedBy?: string;
+  /** Claimed by this designer (false: someone else's copy, theirs to change and send). */
+  mine?: boolean;
   /** The developer building what was sent. */
   builder?: string;
   whatsNew?: string;
@@ -169,6 +171,7 @@ export async function state(): Promise<PanelState> {
   const { index, states, pending } = await current();
   const openCopies = (await proposals()).filter((p) => p.role === "proposal");
   const open = new Map(openCopies.map((p) => [p.claim.component, p.node.id]));
+  const owned = new Map(openCopies.map((p) => [p.claim.component, mine(p.claim)]));
   // Sent designs a branch builds: how far, as its lane last found it (kept on the copy).
   const onBranch = new Map(
     openCopies.flatMap((p) => {
@@ -204,6 +207,7 @@ export async function state(): Promise<PanelState> {
         ...(s.claim?.question ? { question: s.claim.question } : {}),
         ...(s.claim?.review ? { review: s.claim.review } : {}),
         ...(s.claim?.by ? { claimedBy: s.claim.by } : {}),
+        ...(owned.has(s.component) ? { mine: owned.get(s.component) } : {}),
         ...(s.claim?.builder ? { builder: s.claim.builder.by } : {}),
         ...(e?.whatsNew ? { whatsNew: e.whatsNew } : {}),
         ...(e?.liveNodeId ? { liveNodeId: e.liveNodeId } : {}),
@@ -448,7 +452,8 @@ export async function show(p: { nodeId: string }) {
   let pageNode: BaseNode | null = n;
   while (pageNode && pageNode.type !== "PAGE") pageNode = pageNode.parent;
   if (pageNode) await figma.setCurrentPageAsync(pageNode as PageNode);
-  figma.currentPage.selection = [n];
+  // Another designer's copy is shown, not selected (it's theirs to change).
+  if (!othersCopyOwner(n)) figma.currentPage.selection = [n];
   figma.viewport.scrollAndZoomIntoView([n]);
   return { ok: true };
 }
@@ -653,6 +658,7 @@ export async function ready(p: { component: string; note: string; scopes?: Recor
   const note = p.note.trim();
   if (!note) throw new Error("add a short note for the developer");
   const node = await openProposal(p.component);
+  ownCopy(node);
   const record = claimOf(node);
   if (!record) throw new Error("this copy has no claim");
   await check(p.component, { kind: "ready", component: p.component, claim: record.id, note, readyHash: "check" } as never);
@@ -672,9 +678,16 @@ export async function ready(p: { component: string; note: string; scopes?: Recor
   return { ok: true };
 }
 
+/** Someone else's copy: only they send it, change it or unclaim it. */
+function ownCopy(node: BaseNode) {
+  const r = claimOf(node);
+  if (r && !mine(r)) throw new Error(`This is ${r.by}'s copy: only ${r.by} can send it, change it or unclaim it.`);
+}
+
 export async function reopen(p: { component: string }) {
   // Designer wants to keep editing after "ready": unlock; the hash mismatch tells sync it changed.
   const node = await openProposal(p.component);
+  ownCopy(node);
   const record = claimOf(node);
   node.locked = false;
   const { states } = await current();
@@ -685,6 +698,7 @@ export async function reopen(p: { component: string }) {
 
 export async function unclaim(p: { component: string }) {
   const node = await openProposal(p.component);
+  ownCopy(node);
   const record = claimOf(node);
   if (!record) throw new Error("this copy has no claim");
   await check(p.component, { kind: "unclaimed", component: p.component, claim: record.id } as never);
@@ -850,6 +864,7 @@ export async function answerReview(p: { component: string; answer: string }) {
   const { states } = await current();
   const claim = states.get(p.component)?.claim?.id;
   if (!claim) throw new Error("nothing to answer here");
+  ownCopy(await openProposal(p.component));
   await check(p.component, { kind: "review_answered", component: p.component, claim, answer } as never);
   appendEvent({ kind: "review_answered", component: p.component, claim, answer } as never);
   return { ok: true };
@@ -865,6 +880,7 @@ export async function seen(p: { component: string }) {
 /** The designer accepts the code as it is: the proposal closes; Live keeps showing the code. */
 export async function acceptCode(p: { component: string }) {
   const node = await openProposal(p.component);
+  ownCopy(node);
   const record = claimOf(node);
   if (!record) throw new Error("this copy has no claim");
   const e = { kind: "closed", component: p.component, claim: record.id, commit: "", items: [], how: "accepted" } as const;
@@ -882,6 +898,7 @@ export async function acceptCode(p: { component: string }) {
  */
 export async function keepDesign(p: { component: string }) {
   const node = await openProposal(p.component);
+  ownCopy(node);
   const record = claimOf(node);
   if (!record) throw new Error("this copy has no claim");
   const closing = { kind: "closed", component: p.component, claim: record.id, commit: "", items: [], how: "kept" } as const;

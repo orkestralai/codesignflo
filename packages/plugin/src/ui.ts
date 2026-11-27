@@ -283,8 +283,8 @@ const statusLine = (r: PanelRow) =>
                   ? `${r.builder} is building it`
                   : "New design, being built"
                 : r.state === "in_design"
-                  ? r.claimedBy && view?.user && r.claimedBy !== view.user
-                    ? `${r.claimedBy} is redesigning it`
+                  ? r.mine === false || (r.claimedBy && view?.user && r.claimedBy !== view.user)
+                    ? `${r.claimedBy ?? "Another designer"} is redesigning it`
                     : "You're editing your copy"
                   : r.state === "code_new"
                     ? "Built in code without a design"
@@ -375,7 +375,7 @@ const detailText = (r: PanelRow) =>
         : r.unseen && r.whatsNew
           ? esc(r.whatsNew)
           : r.note && (r.state === "ready_for_dev" || r.state === "design_new")
-            ? `<b>Your note:</b> ${esc(r.note)}`
+            ? `<b>${r.mine === false ? `${esc(r.claimedBy ?? "Their")}'s note` : "Your note"}:</b> ${esc(r.note)}`
             : "";
 
 type Act = { a: string; label: string; node?: string; primary?: boolean; disabled?: string };
@@ -383,6 +383,14 @@ type Act = { a: string; label: string; node?: string; primary?: boolean; disable
 function actionsFor(r: PanelRow): { main?: Act; menu: Act[] } {
   const show: Act[] = r.liveNodeId ? [{ a: "show", label: "Show in Live", node: r.liveNodeId }] : [];
   const copy: Act[] = r.proposalNodeId ? [{ a: "show", label: "Open my copy", node: r.proposalNodeId }] : [];
+  // Another designer's copy: to look at, theirs to change and send.
+  if (r.mine === false && (r.state === "in_design" || r.state === "ready_for_dev" || r.state === "design_new"))
+    return {
+      ...(r.proposalNodeId
+        ? { main: { a: "show", label: `Show ${r.claimedBy ? `${r.claimedBy}'s` : "their"} copy`, node: r.proposalNodeId } }
+        : {}),
+      menu: show,
+    };
   if (r.state === "design_new") return { main: copy[0], menu: [{ a: "unclaim", label: "Withdraw" }] };
   if (r.state === "ready_for_dev")
     return {
@@ -432,11 +440,14 @@ const sectionOf = (r: PanelRow) =>
   r.question || r.conflict || r.unseen || r.state === "code_new"
     ? "needs"
     : r.state === "in_design" || r.state === "ready_for_dev" || r.state === "design_new"
-      ? "work"
+      ? r.mine === false
+        ? "others"
+        : "work"
       : "rest";
 const SECTIONS: [string, string][] = [
   ["needs", "Needs you"],
   ["work", "Your work"],
+  ["others", "Other designers' work"],
   ["rest", "Everything else"],
 ];
 /** The row whose ⋯ menu is open, and the search text. */
@@ -592,6 +603,8 @@ function newDesignBox() {
  * update it, so the panel says when one is out and how to put it in place.
  */
 let newerPlugin: { version: string; download: string } | null = null;
+/** This plugin is older than the oldest the service lets apply Live updates: it says so and stops taking them. */
+let tooOld: { minimum: string; download: string } | null = null;
 /** a > b, for versions like 0.5.1 (numbers compared part by part; a pre-release suffix is ignored). */
 const isNewer = (a: string, b: string) => {
   const parts = (v: string) =>
@@ -608,10 +621,12 @@ async function checkPluginVersion() {
   if (!web) return;
   try {
     const r = await fetch(`${web.replace(/\/$/, "")}/api/plugin`, { cache: "no-store" });
-    const b = (await r.json()) as { version?: string; download?: string };
+    const b = (await r.json()) as { version?: string; minimum?: string; download?: string };
     const next = b.version && b.download && isNewer(b.version, __VERSION__) ? { version: b.version, download: b.download } : null;
-    if (JSON.stringify(next) !== JSON.stringify(newerPlugin)) {
+    const old = b.minimum && b.download && isNewer(b.minimum, __VERSION__) ? { minimum: b.minimum, download: b.download } : null;
+    if (JSON.stringify(next) !== JSON.stringify(newerPlugin) || JSON.stringify(old) !== JSON.stringify(tooOld)) {
       newerPlugin = next;
+      tooOld = old;
       render();
     }
   } catch {
@@ -619,6 +634,9 @@ async function checkPluginVersion() {
   }
 }
 function newerPluginNotice(): string {
+  // Too old to apply Live updates: said every time (no Later), with what to do.
+  if (tooOld)
+    return `<div class="notice warn"><span><b>Update CoDesignFlo to keep Live up to date.</b> This plugin (${esc(__VERSION__)}) is older than ${esc(tooOld.minimum)}, the oldest that can apply the developers' updates, so they wait until you update. Download it, unzip it into the folder you imported the plugin from (replacing its files), then close and reopen the plugin.</span><button type="button" class="primary" data-a="plugin-download">Download</button></div>`;
   if (!newerPlugin || ctx?.guide[DEMO_PREFS]?.pluginLater === newerPlugin.version) return "";
   return `<div class="notice"><span><b>CoDesignFlo ${esc(newerPlugin.version)} is out</b> (you have ${esc(__VERSION__)}). Download it, unzip it into the folder you imported the plugin from (replacing its files), then close and reopen the plugin.</span><button type="button" class="primary" data-a="plugin-download">Download</button><button type="button" class="quiet" data-a="plugin-later">Later</button></div>`;
 }
@@ -733,6 +751,8 @@ async function applyPendingNow() {
   // A panel replaced by a development hot reload stops here (its timer would otherwise keep running, take
   // an update and wait forever for answers that go to the new panel).
   if (retiring || !cloud?.project || applying || !view?.setUp || $("conn").classList.contains("on")) return;
+  // Too old for the service to hand it updates (it would refuse): nothing to take until the plugin is updated.
+  if (tooOld) return;
   if (await cloud.refreshChecks()) render();
   // Billing can change any time (the owner subscribes): checked about once a minute.
   if (Date.now() - billingCheckedAt > 60_000) {
@@ -2506,7 +2526,7 @@ $("main").addEventListener("click", async (ev) => {
         await openPeople(false);
         return;
       case "plugin-download":
-        if (newerPlugin) toMain({ kind: "openExternal", url: newerPlugin.download });
+        if (newerPlugin || tooOld) toMain({ kind: "openExternal", url: (newerPlugin ?? tooOld)!.download });
         return;
       case "plugin-later":
         if (!newerPlugin) return;
@@ -2789,6 +2809,11 @@ $("main").addEventListener("click", async (ev) => {
         toast("Your copy of the whole component (all its variants) is on top of your lane in Proposals. Edit it freely.");
         break;
       case "reopen":
+        // Back to editing a sent copy (it was a fall-through into Accept the code's version since 9 Oct: Keep
+        // editing closed the design and archived the copy).
+        await act("reopen", { component });
+        toast("You can change your copy again. Send it with Ready for dev when it's done.");
+        break;
       case "acceptCode":
         await act("acceptCode", { component });
         toast("Closed with the code's version. Your copy is in Archive.");
@@ -2992,6 +3017,10 @@ window.onmessage = (ev: MessageEvent<{ pluginMessage?: MainToUi }>) => {
     if (!applying && view?.rows.some((r) => r.state === "in_design")) void refresh();
   } else if (m.kind === "changed") {
     toMain({ kind: "getContext" });
+  } else if (m.kind === "notYours") {
+    toast(
+      `That's ${m.owner}'s copy: only ${m.owner} changes it, so it can't be selected here. To work on it too, ask ${m.owner}, or claim something else.`,
+    );
   } else if (m.kind === "liveEdited") {
     // Live and the lanes are the code's: say so once per change (moves and sizes were already put back).
     toast(

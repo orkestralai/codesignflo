@@ -5,7 +5,12 @@
 
 import type { TelemetryEvent } from "@codesignflo/core";
 import { CANON_VERSION, type LedgerEvent, type Raw, readEvent, type UpdateInput, unpackBundle } from "@codesignflo/core";
+
 import { ProjectSignal } from "./realtime";
+
+declare const __VERSION__: string;
+/** This plugin's version (the service compares it with the oldest it lets apply Live updates). */
+const PLUGIN_VERSION = typeof __VERSION__ === "string" ? __VERSION__ : "0.0.0";
 
 /** mode "selfhost": a team's own CoDesignFlo box (no billing: its service reports every seat as paid). */
 export type Service = { url: string; anon: string; web: string; mode?: "cloud" | "selfhost" };
@@ -478,7 +483,13 @@ export class Cloud {
   } | null> {
     if (!this.project || !(await this.ready())) return null;
     // "The file is open": a developer's sync waits for its update and reports how it went.
-    await this.rpc("plugin_seen", { p_project: this.project.id, p_file_name: this.fileName || null }, true).catch(() => 0);
+    // With this plugin's version (the service hands Live updates only to recent enough plugins); a service from
+    // before versions takes the two-argument form.
+    await this.rpc(
+      "plugin_seen",
+      { p_project: this.project.id, p_file_name: this.fileName || null, p_version: PLUGIN_VERSION },
+      true,
+    ).catch(() => this.rpc("plugin_seen", { p_project: this.project!.id, p_file_name: this.fileName || null }, true).catch(() => 0));
     type Row = {
       id: number;
       commit: string;
@@ -488,11 +499,11 @@ export class Cloud {
       bundle?: string | null;
     };
     // Live updates and branch previews; a service from before previews has only take_update (Live).
-    const rows = await this.rpc<Row[]>("take_next_update", { p_project: this.project.id }, true).catch((e: Error) =>
-      /take_next_update|function|schema cache/i.test(e.message)
-        ? this.rpc<Row[]>("take_update", { p_project: this.project!.id }, true)
-        : Promise.reject(e),
-    );
+    // This plugin's version goes with it: a plugin older than the service's minimum is refused (with what to do).
+    const missing = (e: Error) => /take_next_update|take_update|function|schema cache/i.test(e.message);
+    const rows = await this.rpc<Row[]>("take_next_update", { p_project: this.project.id, p_plugin_version: PLUGIN_VERSION }, true)
+      .catch((e: Error) => (missing(e) ? this.rpc<Row[]>("take_next_update", { p_project: this.project!.id }, true) : Promise.reject(e)))
+      .catch((e: Error) => (missing(e) ? this.rpc<Row[]>("take_update", { p_project: this.project!.id }, true) : Promise.reject(e)));
     const row = rows[0];
     if (!row) return null;
     // The compiled code comes gzipped (CLI 0.2.1 and later); older CLIs put it in the payload.

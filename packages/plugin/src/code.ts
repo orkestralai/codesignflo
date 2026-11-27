@@ -5,7 +5,7 @@ import { bannerClosed, bannerKeepHidden, bannerOpen } from "./banner.js";
 import * as ds from "./designsystem.js";
 import { demoShotsFromLive, onProgress } from "./executor.js";
 import { clearFile, fileContents, forgetProject, init, meta, migrateLegacy, resetDemoFile, stack } from "./facts.js";
-import { asPlugin, guardChanges } from "./guard.js";
+import { asBuild, asPlugin, guardChanges, othersCopyOwner, sweep } from "./guard.js";
 import { handlers } from "./handlers.js";
 import type { GuidePrefs, MainToUi, UiToMain } from "./messages.js";
 import * as panel from "./panel.js";
@@ -30,10 +30,40 @@ const migrated = migrateLegacy().catch(() => 0);
 // The "plugin is closed" banner on the Live page: hidden while the plugin runs, shown again when it closes.
 void migrated.then(() => (meta() ? asPlugin(bannerOpen) : undefined)).catch(() => undefined);
 const bannerTimer = setInterval(() => void asPlugin(async () => bannerKeepHidden()), 10_000);
+// Live items changed while the plugin worked, by someone else, or (every 10 s, and once at the start) while no
+// plugin was open: put back (see guard).
+let ticks = 0;
+const guardTimer = setInterval(() => {
+  const all = ticks++ % 5 === 0;
+  void migrated
+    .then(() => (meta() ? sweep(stack, all) : []))
+    .then((mine) => {
+      if (mine.length) post({ kind: "liveEdited", names: mine.map((n) => n.name), inside: false });
+    })
+    .catch(() => undefined);
+}, 2_000);
 figma.on("close", () => {
   clearInterval(bannerTimer);
+  clearInterval(guardTimer);
   bannerClosed();
 });
+
+/** Requests that build Live or the lanes from an update: what they lay out is how the code draws it (see guard). */
+const BUILDS = new Set([
+  "init",
+  "tokensPush",
+  "putImages",
+  "placeShot",
+  "reconcile",
+  "reconcileScreen",
+  "previewPlan",
+  "previewStart",
+  "previewEnd",
+  "previewRemove",
+  "lanesKeep",
+  "archiveLive",
+  "applyOps",
+]);
 
 /** Requests that change what the panel shows; after them the panel refreshes. */
 const CHANGES = new Set(["init", "writeIndex", "ackEvents", "reconcile", "cloneToProposals", "archiveProposal"]);
@@ -61,7 +91,8 @@ async function handleRequest(req: protocol.Request) {
     if (!fn) throw new Error(`unknown method ${req.method}`);
     const key = (req.params as { spec?: { k?: string } } | undefined)?.spec?.k;
     onProgress((done) => post({ kind: "progress", msg: { t: "progress", id: req.id, done } }));
-    const result = await timed(`req ${req.method}${key ? ` ${key}` : ""}`, async () => fn(req.params as never, req.id));
+    const run = async () => fn(req.params as never, req.id);
+    const result = await timed(`req ${req.method}${key ? ` ${key}` : ""}`, BUILDS.has(req.method) ? () => asBuild(run) : run);
     onProgress(null);
     post({ kind: "res", msg: { t: "res", id: req.id, ok: true, result } });
     if (CHANGES.has(req.method)) post({ kind: "changed" });
@@ -138,6 +169,15 @@ const gs = globalThis as {
 gs.__cdlSelected = panel.selectedComponent;
 if (!gs.__cdlSelection) {
   figma.on("selectionchange", () => {
+    // Another designer's copy: theirs to change. Not selectable here, so it can't be moved or edited by mistake.
+    const sel = figma.currentPage.selection;
+    const theirs = sel.map((n) => othersCopyOwner(n));
+    const owner = theirs.find((o) => o);
+    if (owner) {
+      figma.currentPage.selection = sel.filter((_, i) => !theirs[i]);
+      figma.ui.postMessage({ kind: "notYours", owner } satisfies MainToUi);
+      return;
+    }
     let picked: { component?: string; from?: string; branch?: string; why?: string } = {};
     try {
       picked = gs.__cdlSelected?.() ?? {};

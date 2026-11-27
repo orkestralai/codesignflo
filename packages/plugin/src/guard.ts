@@ -2,7 +2,13 @@
 // edited. Everything inside a Live or lane item is locked (clicks go through to the item), and the item itself is
 // watched: moved or resized, it's put back at once; any other change is undone by the next update, and the panel
 // says so. (A locked item couldn't be clicked at all: only a right-click selected it.)
-import { LAYOUT, NS } from "@codesignflo/core";
+//
+// Anyone's changes count, not only this designer's: someone without the plugin open moves an item, and any open
+// plugin puts it back once the file has been quiet for a few seconds (another plugin may be applying an update:
+// those changes come in batches, and the item's record changes with them). What's laid out is recorded only by an
+// update's build: laying sections out again (every panel refresh) keeps the record, so a designer's resize isn't
+// taken as how the item was built.
+import { LAYOUT, NODE, NS } from "@codesignflo/core";
 
 /** Plugin work in progress (requests, panel actions): its own changes aren't the designer's. */
 let writing = 0;
@@ -11,10 +17,47 @@ export async function asPlugin<T>(f: () => Promise<T>): Promise<T> {
   try {
     return await f();
   } finally {
-    writing--;
+    done();
   }
 }
+function done() {
+  writing--;
+}
 export const pluginWriting = () => writing > 0;
+
+/** An update's build in progress: what's laid out now is how the code draws it (see readOnly). */
+let building = 0;
+export async function asBuild<T>(f: () => Promise<T>): Promise<T> {
+  building++;
+  markBusy();
+  try {
+    return await f();
+  } finally {
+    building--;
+  }
+}
+
+/**
+ * Another plugin in this file is applying an update: kept on the file (so every open plugin sees it) for a minute
+ * after its last build request. Its changes aren't a designer's, and the item records it writes come with them.
+ */
+const BUSY = "updatingUntil";
+const me = Math.random().toString(36).slice(2);
+function markBusy() {
+  try {
+    const [until, by] = figma.root.getSharedPluginData(NS, BUSY).split(" ");
+    if (by === me && Number(until) - Date.now() > 30_000) return;
+    figma.root.setSharedPluginData(NS, BUSY, `${Date.now() + 60_000} ${me}`);
+  } catch {}
+}
+function othersBusy(): boolean {
+  try {
+    const [until, by] = figma.root.getSharedPluginData(NS, BUSY).split(" ");
+    return by !== me && Number(until) > Date.now();
+  } catch {
+    return false;
+  }
+}
 
 /** Where an item keeps how it was laid out: its section, size and own properties (what a change is put back to). */
 export const BUILT = "builtAs";
@@ -86,12 +129,21 @@ export function readOnly(item: SceneNode, section: SectionNode) {
   }
   const built: Built = { section: section.id, w: Math.round(item.width * 100) / 100, h: Math.round(item.height * 100) / 100, own };
   const raw = JSON.stringify(built);
-  if (item.getSharedPluginData(NS, BUILT) !== raw) item.setSharedPluginData(NS, BUILT, raw);
+  const had = item.getSharedPluginData(NS, BUILT);
+  // Recorded when an update builds it (or the first time it's laid out); laid out again otherwise, the record stays:
+  // a designer's resize or move isn't how the code draws it.
+  if (had && !building) return;
+  if (had !== raw) item.setSharedPluginData(NS, BUILT, raw);
 }
 
 /** The item back as it was laid out: in its section, at its size, its own properties as they were. */
 /** Whether anything had to be put back (the plugin's own restore fires changes too: nothing to do for those). */
-function restore(item: SceneNode, at: { section: SectionNode | null; built: Built | null }, relayout: (s: SectionNode) => void): boolean {
+function restore(
+  item: SceneNode,
+  at: { section: SectionNode | null; built: Built | null },
+  relayout: (s: SectionNode) => void,
+  always = true,
+): boolean {
   let changed = false;
   if (at.section && item.parent !== at.section) {
     at.section.appendChild(item);
@@ -118,9 +170,9 @@ function restore(item: SceneNode, at: { section: SectionNode | null; built: Buil
         c.locked = true;
         changed = true;
       }
-  // Its place in the section (moved within it): laid out again.
+  // Its place in the section (moved within it): laid out again. A sweep (no change seen) lays out only what it fixed.
   const [x, y] = [item.x, item.y];
-  if (at.section) relayout(at.section);
+  if (at.section && (always || changed)) relayout(at.section);
   return changed || item.x !== x || item.y !== y;
 }
 
@@ -133,12 +185,23 @@ export async function guardChanges(
   e: NodeChangeEvent,
   relayout: (s: SectionNode) => void,
 ): Promise<{ restored: SceneNode[]; inside: SceneNode[] }> {
-  if (pluginWriting()) return { restored: [], inside: [] };
+  const busy = pluginWriting();
   const touched = new Map<string, { item: SceneNode; section: SectionNode | null; built: Built | null; inside: boolean }>();
   for (const c of e.nodeChanges) {
-    if (c.origin !== "LOCAL" || c.node.removed) continue;
+    if (c.node.removed) continue;
     const at = await codeItemOf(c.node);
     if (!at) continue;
+    // Someone else's change: looked at once the file is quiet. One of ours while the plugin works: looked at when
+    // it's done (it can't tell its own changes from the designer's then; its own leave nothing to put back).
+    if (c.origin !== "LOCAL") {
+      later.remote.add(at.item.id);
+      later.remoteAt = Date.now();
+      continue;
+    }
+    if (busy) {
+      later.local.add(at.item.id);
+      continue;
+    }
     const t = touched.get(at.item.id) ?? { ...at, inside: false };
     // A change below the item's own children (they're locked: only an unlocked layer gets there).
     // Layers inside move and resize with the item (its own resize): only other changes count as inside.
@@ -156,9 +219,95 @@ export async function guardChanges(
       if (t.inside) inside.push(t.item);
     }
   } finally {
-    writing--;
+    done();
   }
   return { restored, inside };
+}
+
+/** A claim's owner is this designer (by Figma user id; claims from before lanes by name). No claim: anyone's. */
+export function mine(r: { by: string; byId?: string } | null | undefined): boolean {
+  if (!r) return true;
+  const u = figma.currentUser;
+  if (r.byId && u?.id) return r.byId === u.id;
+  return r.by === (u?.name ?? "designer");
+}
+
+/**
+ * The copy a layer is in, when it's another designer's open copy: its owner's name; else null. Another designer's
+ * copy is theirs alone to change: this designer can look at it, not select it (see code.ts), so not change it.
+ */
+export function othersCopyOwner(n: BaseNode): string | null {
+  for (let c: BaseNode | null = n; c && c.type !== "PAGE" && c.type !== "DOCUMENT"; c = c.parent) {
+    // A placed component carries its main component's data: only the copy itself says whose it is.
+    if (c.type === "INSTANCE") continue;
+    const raw = c.getSharedPluginData(NS, NODE.claim);
+    if (!raw) continue;
+    if (c.getSharedPluginData(NS, NODE.role) !== "proposal") return null;
+    try {
+      const r = JSON.parse(raw) as { by: string; byId?: string };
+      return mine(r) ? null : r.by;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Items to look at again: changed while the plugin was working, or by someone else. */
+const later = { local: new Set<string>(), remote: new Set<string>(), remoteAt: 0 };
+
+/** Every item on the Live page with a record of how it was laid out, in a section or dragged out of one. */
+async function liveItems(): Promise<SceneNode[]> {
+  const page = figma.root.children.find((p) => p.name === LAYOUT.live.page);
+  if (!page) return [];
+  await page.loadAsync();
+  const out: SceneNode[] = [];
+  for (const n of page.children) {
+    if (n.getSharedPluginData(NS, BUILT)) out.push(n);
+    if (n.type === "SECTION") for (const c of n.children) if (c.getSharedPluginData(NS, BUILT)) out.push(c);
+  }
+  return out;
+}
+
+async function putBack(ids: Iterable<string>, relayout: (s: SectionNode) => void, always: boolean): Promise<SceneNode[]> {
+  const restored: SceneNode[] = [];
+  writing++;
+  try {
+    for (const id of ids) {
+      const n = await figma.getNodeByIdAsync(id);
+      if (!n || n.removed || !("parent" in n)) continue;
+      const at = await codeItemOf(n);
+      if (at && restore(at.item, at, relayout, always)) restored.push(at.item);
+    }
+  } finally {
+    done();
+  }
+  return restored;
+}
+
+/**
+ * The checks that wait: this designer's changes made while the plugin worked (once it's done), someone else's (once
+ * the file has been quiet for 5 s and no other plugin is applying an update), and with `all`, every Live item,
+ * for what was changed while no plugin was open. Returns this designer's items put back (the panel says so).
+ */
+export async function sweep(relayout: (s: SectionNode) => void, all: boolean): Promise<SceneNode[]> {
+  if (pluginWriting()) return [];
+  const ours = later.local.size ? await putBack(take(later.local), relayout, true) : [];
+  if (othersBusy() || Date.now() - later.remoteAt < 5_000) return ours;
+  if (later.remote.size) await putBack(take(later.remote), relayout, true);
+  if (all) {
+    await putBack(
+      (await liveItems()).map((n) => n.id),
+      relayout,
+      false,
+    );
+  }
+  return ours;
+}
+function take(s: Set<string>): string[] {
+  const ids = [...s];
+  s.clear();
+  return ids;
 }
 
 /**

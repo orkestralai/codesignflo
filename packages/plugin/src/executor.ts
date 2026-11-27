@@ -1230,9 +1230,20 @@ async function reconcileChildren(parent: SceneNode & ChildrenMixin, specs: SpecN
     }
   }
   // Owned (keyed) children that are no longer in the spec, or a second layer with a key the spec has (only the
-  // one the update just placed is it: an older one with the same key was left over and drawn twice).
+  // one the update just placed is it: an older one with the same key was left over and drawn twice). On the Live
+  // page, a layer with no key too: this is a layer generated from the code (pages built on a designer's design are
+  // patched instead), and Live is read-only, so it's a leftover the app doesn't draw (a stray star after a card's
+  // rating, drawn in Figma only, that a designer then had to "remove" in a design).
+  const live = onLivePage(parent);
   for (const c of [...parent.children]) {
     const k = keyOf(c);
+    if (!k) {
+      if (live && !pinsOf(c).length) {
+        c.remove();
+        stats.deleted++;
+      }
+      continue;
+    }
     const stale = !wanted.has(k) || index.get(k) !== c;
     // Kept as design (pinned) layers stay even when the code doesn't have them.
     if (k && isOriginal(c) && stale && !pinsOf(c).includes("*")) {
@@ -1242,6 +1253,13 @@ async function reconcileChildren(parent: SceneNode & ChildrenMixin, specs: SpecN
     }
   }
   placeInGrid(parent, stats);
+}
+
+/** On the Live page (Live and the branch lanes): what's there is the code's. */
+function onLivePage(n: BaseNode): boolean {
+  let p: BaseNode | null = n;
+  while (p && p.type !== "PAGE") p = p.parent;
+  return !!p && p.name === LAYOUT.live.page;
 }
 
 /**
@@ -1432,17 +1450,25 @@ const anchorOf = (n: BaseNode): Anchor | null => {
   }
 };
 
-/** The designer's latest design for a component or page that the code has implemented (an archived proposal). */
+/**
+ * The designer's latest new design for a page that the code has implemented (an archived proposal). Only one
+ * drawn as new (New design): a redesign of a page the code already drew is a set of changes, done once they're
+ * in the code. Kept as the page's reference, it went stale as soon as anything on the page changed after it (a
+ * Dashboard redesign held the trip cards' old price colour after another designer's card change, and the app's
+ * new colour was reported as code to change back).
+ */
 async function latestDesign(component: string, closed: Set<string>): Promise<{ node: SceneNode; at: string } | null> {
   const archive = await sections.archive();
   let best: { node: SceneNode; at: string } | null = null;
   for (const n of archive.children) {
-    let c: { id?: string; component?: string; at?: string } = {};
+    let c: { id?: string; component?: string; at?: string; kind?: string } = {};
     try {
       c = JSON.parse(n.getSharedPluginData(NS, NODE.claim) || "{}");
     } catch {}
     // Only a design the code implemented (its proposal closed): a withdrawn copy is archived too.
     if (c.component !== component || !c.at || !c.id || !closed.has(c.id) || n.getSharedPluginData(NS, NODE.removedFromCode)) continue;
+    // A new design (its claim has a kind, its id starts with "n"); a claimed redesign has neither.
+    if (!c.kind && !c.id.startsWith("n")) continue;
     if (!best || c.at > best.at) best = { node: n, at: c.at };
   }
   return best;
@@ -2264,9 +2290,10 @@ async function fit(n: SceneNode, s: SpecNode, d: Found): Promise<boolean> {
 /** Built from exactly this code already (and not touched since): nothing to rewrite. */
 /**
  * Bumped when the plugin builds differently: everything is rebuilt once (2: positions; 3: fitted to the app;
- * 4: pictures that were placeholders, built before the service carried them; 5: layers stuck out of the flow; 6: leftovers inside childless layers; 7: rows stuck wrapping).
+ * 4: pictures that were placeholders, built before the service carried them; 5: layers stuck out of the flow; 6: leftovers inside childless layers; 7: rows stuck wrapping; 8: layers with no key on the Live page, left over
+ * from when Live could be edited, removed).
  */
-const BUILD = "7";
+const BUILD = "8";
 /** The spec's hash with what else a build depends on: token links (everywhere), Library links (pages). */
 const builtHash = (specHash: string | undefined, links?: LibraryLinks) => {
   if (!specHash) return specHash;
@@ -2407,7 +2434,9 @@ export async function reconcileScreen(p0: {
   const anchor = existing ? anchorOf(existing) : null;
   const onDesign = !!anchor && anchor.used !== false;
   const newDesign = !!design && (!anchor || anchor.id !== design.node.id || design.at > anchor.at || (anchor.v ?? 1) < ANCHOR_V);
-  if (!newDesign && existing && builtFrom(existing, p.specHash)) {
+  // Built on a design that's no longer the page's reference: generated from the app again, even with the same code.
+  const lostDesign = onDesign && !design;
+  if (!newDesign && !lostDesign && existing && builtFrom(existing, p.specHash)) {
     setSrc(existing, p0.specHash);
     return { id: existing.id, stats, skipped: true };
   }
