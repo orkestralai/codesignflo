@@ -25,6 +25,11 @@
       .notice .code { display: block; margin-top: 6px; font: 600 22px/1.2 ui-monospace, monospace; letter-spacing: 6px; }
       .hint { padding: 4px; color: var(--figma-color-text-secondary); }
       .hint.foot { color: var(--figma-color-text-tertiary); }
+      .refer { margin: 10px 4px 4px; padding: 10px 12px; border: 1px solid var(--figma-color-border); border-radius: 6px; display: grid; gap: 6px; }
+      .refer-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+      .refer-text, .refer-stats { color: var(--figma-color-text-secondary); }
+      .refer-link { display: flex; gap: 6px; align-items: center; min-width: 0; }
+      .refer-link code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 6px; border-radius: 4px; background: var(--figma-color-bg-secondary); font-size: 11px; }
       .hint.warn { color: var(--figma-color-text-warning); }
       /* search */
       .search { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: 5px; background: var(--figma-color-bg-secondary); color: var(--figma-color-icon-secondary, var(--figma-color-text-secondary)); }

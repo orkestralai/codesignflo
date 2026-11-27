@@ -682,5 +682,17 @@ export class Cloud {
     }
     // A seat arrived: the designs held meanwhile go now.
     if (was === "unpaid" && this.billing?.state !== "unpaid") await this.flush();
+    await this.refreshReferral();
+  }
+
+  /**
+   * This person's referral link and how it's doing (the website's Billing shows the same): designers invite other
+   * designers from the panel, where they spend their time. None on a self-hosted box (no billing there).
+   */
+  referral: { code: string; joined: number; earned: number } | null = null;
+  async refreshReferral() {
+    if (this.service.mode === "selfhost") return;
+    const r = (await this.rpc<{ code: string | null; joined: number; earned: number }[]>("my_referrals", {}, true).catch(() => null))?.[0];
+    if (r?.code) this.referral = { code: r.code, joined: r.joined ?? 0, earned: r.earned ?? 0 };
   }
 }

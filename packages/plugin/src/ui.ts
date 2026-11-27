@@ -757,9 +757,10 @@ async function applyPendingNow() {
   // Billing can change any time (the owner subscribes): checked about once a minute.
   if (Date.now() - billingCheckedAt > 60_000) {
     billingCheckedAt = Date.now();
-    const before = JSON.stringify(cloud.billing);
+    // With the referral link and its numbers (the card at the bottom).
+    const before = JSON.stringify([cloud.billing, cloud.referral]);
     await cloud.refreshBilling();
-    if (JSON.stringify(cloud.billing) !== before) render();
+    if (JSON.stringify([cloud.billing, cloud.referral]) !== before) render();
   }
   const c = cloud;
   // Lanes of branches disconnected since: taken out, about once a minute.
@@ -2122,6 +2123,7 @@ function render() {
   }
   if (view?.setUp && !readyRow && !peopleOpen && !bringIn && !guideOpen && !ds) {
     parts.push(newDesignBox());
+    parts.push(referralCard());
     parts.push(
       `<div class="hint foot"><button type="button" class="link" data-a="ds-open">Design System: link your components to the code's</button></div>`,
     );
@@ -2177,6 +2179,38 @@ const ago = (iso: string) => {
   if (s < 129600) return `${Math.round(s / 3600)} h ago`;
   return `${Math.round(s / 86400)} days ago`;
 };
+
+/** The designer's referral link, to share with designers new to CoDesignFlo (the website's Billing shows it too). */
+const referralLink = () =>
+  cloud?.referral && cloud.service.web ? `${cloud.service.web.replace(/\/$/, "")}/?ref=${cloud.referral.code}` : "";
+function referralCard(): string {
+  const r = cloud?.referral;
+  // Designers only (a developer's invitations don't count), not in the demo or on a self-hosted box.
+  if (!r || !referralLink() || cloud?.role === "developer" || cloud?.project?.demo || selfhost()) return "";
+  const stats = r.joined
+    ? `${r.joined} designer${r.joined === 1 ? "" : "s"} joined through you · ${r.earned} free month${r.earned === 1 ? "" : "s"} earned`
+    : "Nobody has joined through you yet.";
+  return `<div class="refer"><div class="refer-head"><b>Invite designers, get a month free</b><button type="button" class="link" data-a="ref-terms">Terms</button></div>
+    <div class="refer-text">Designers new to CoDesignFlo get their second month free, and you get a month free when it starts.</div>
+    <div class="refer-link"><code>${esc(referralLink())}</code><button type="button" class="primary" data-a="ref-copy">Copy link</button></div>
+    <div class="refer-stats">${esc(stats)}</div></div>`;
+}
+/** Copies text from the panel: Figma's plugin frame often refuses the clipboard API, so a selected textarea first. */
+function copyText(text: string): boolean {
+  const t = document.createElement("textarea");
+  t.value = text;
+  t.style.position = "fixed";
+  t.style.opacity = "0";
+  document.body.appendChild(t);
+  t.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {}
+  t.remove();
+  if (!ok) void navigator.clipboard?.writeText(text).catch(() => undefined);
+  return ok;
+}
 
 function toast(text: string) {
   const t = $("toast");
@@ -2292,6 +2326,12 @@ $("main").addEventListener("click", async (ev) => {
     switch (b.dataset.a) {
       case "ds-open":
         await openSystem();
+        return;
+      case "ref-copy":
+        toast(copyText(referralLink()) ? "Link copied. Send it to designers new to CoDesignFlo." : `Your link: ${referralLink()}`);
+        return;
+      case "ref-terms":
+        if (cloud?.service.web) toMain({ kind: "openExternal", url: `${cloud.service.web.replace(/\/$/, "")}/terms` });
         return;
       case "ds-close":
         ds = null;
